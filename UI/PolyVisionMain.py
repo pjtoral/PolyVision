@@ -485,7 +485,7 @@ class VideoCapture(QThread):
     ImageUpdate = pyqtSignal(QImage)
     def run(self):
         self.ThreadActive = True
-        Capture = cv2.VideoCapture(1) #this is default camera
+        Capture = cv2.VideoCapture(0) #this is default camera
         #Capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Set the width to 1280 pixels
         #Capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  # Set the height to 720 pixels
         #Capture.set(cv2.CAP_PROP_FPS, 30)
@@ -499,9 +499,6 @@ class VideoCapture(QThread):
                 #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD )
                 ImageScaled = ConvertToQtFormat.scaled(1280,720, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.ImageUpdate.emit(ImageScaled)
-                return True, frame
-            else: 
-                return False, None
     def stop(self):
         self.ThreadActive = False
         self.quit()
