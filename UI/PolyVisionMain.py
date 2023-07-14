@@ -75,11 +75,23 @@ class Ui_MainWindow(QWidget):
         file_path = os.path.join(save_path, filename)
         frame.save(file_path)
 
-   # def goToStatistics(self):
-   #     self.Window = QtWidgets.QMainWindow()
-       # self.ui = Ui_Dialog()
-       # self.ui.setupUi(self.Window)
-       # self.Window.showMaximized()
+
+    def goToSettings(self):
+        goToSets = SettingsWindow(self)
+        goToSets.exec_()
+
+    def moveUp(self):
+        self.focusValue.setText("upping") 
+
+    def moveDown(self):
+        self.focusValue.setText("downing") 
+
+    def moveLeft(self):
+        self.focusValue.setText("lefting") 
+
+    def moveRight(self):
+        self.focusValue.setText("righting") 
+
 
     #defining pyQt5 widgets
     def setupUi(self, MainWindow):
@@ -131,6 +143,7 @@ class Ui_MainWindow(QWidget):
         self.centralwidget.setObjectName("centralwidget")
         self.progressBar.setProperty("value", 16)
         self.progressBar.setObjectName("progressBar")
+        
         #this is for the OpenCV Video
         self.graphicsView.setStyleSheet("background-color: rgb(0, 0, 0);")
         self.graphicsView.setObjectName("graphicsView")
@@ -212,6 +225,7 @@ class Ui_MainWindow(QWidget):
         self.filamentValue = QtWidgets.QLabel(self.centralwidget)    
         self.filamentValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.filamentValue.setObjectName("filamentValue")
+        
         #setting font for labels
         font = QtGui.QFont()
         font.setFamily("Nirmala UI")
@@ -230,6 +244,7 @@ class Ui_MainWindow(QWidget):
         self.detectionLabel.setFont(font)
         self.progressLabel.setFont(font)
         self.locationLabel.setFont(font)
+        
         #setting font for values
         font.setPointSize(11)
         font.setBold(False)
@@ -253,19 +268,23 @@ class Ui_MainWindow(QWidget):
         font.setPointSize(10)
         self.xValue.setFont(font)
         self.yValue.setFont(font)
+        
         #seeting font for app Title
         font.setFamily("Segoe UI Historic")
         font.setPointSize(18)
         self.applTitle.setFont(font)
+        
         #setting font for section titles
         font.setPointSize(11)
         self.grblTitle.setFont(font)
         self.realTimeLabel.setFont(font)
         self.classLabel.setFont(font)
         self.currentStatus.setFont(font)
+        
         #setting font size for folder name
         font.setPointSize(22)
         self.placeValue.setFont(font)
+        
         #Capture Button for Images
         self.captureButton      = QtWidgets.QPushButton(self.centralwidget) 
         self.measureButton      = QtWidgets.QPushButton(self.centralwidget)        
@@ -304,9 +323,15 @@ class Ui_MainWindow(QWidget):
         self.xWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.yWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.zWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
+        
         #======================BUTTON ACTIONS===========================#
         self.captureButton.clicked.connect(self.captureButtonClicked)
+        self.grblUP.clicked.connect(self.moveUp)
+        self.grblDOWN.clicked.connect(self.moveDown)
+        self.grblLEFT.clicked.connect(self.moveLeft)
+        self.grblRIGHT.clicked.connect(self.moveRight)
         #self.statisticsButton.clicked.connect(self.goToStatistics)
+        self.settingsButton.clicked.connect(self.goToSettings)
         #======================APP&LOGOS COORDNT========================#
         self.applTitle.setGeometry(QtCore.QRect(100, 70, 140, 30))
         self.appLogo.setGeometry(QtCore.QRect(30, 60, 60, 50))
@@ -445,9 +470,13 @@ class Ui_MainWindow(QWidget):
         self.captureButton.setText(_translate("MainWindow", "Capture"))
         self.measureButton.setText(_translate("MainWindow", "Measure"))
         self.grblUP.setText(_translate("MainWindow", "↑"))
+        self.grblUP.setShortcut("Up")
         self.grblDOWN.setText(_translate("MainWindow", "↓"))
+        self.grblDOWN.setShortcut("Down")
         self.grblLEFT.setText(_translate("MainWindow", "←"))
+        self.grblLEFT.setShortcut("Left")
         self.grblRIGHT.setText(_translate("MainWindow", "→"))
+        self.grblRIGHT.setShortcut("Right")
         self.grblHOME.setText(_translate("MainWindow", "HOME"))
         self.detectButton.setText(_translate("MainWindow", "Detect"))
         self.imagesButton.setText(_translate("MainWindow", "Images"))
@@ -503,7 +532,18 @@ class VideoCapture(QThread):
         self.ThreadActive = False
         self.quit()
 
-#class StasticalScene():
+class SettingsWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Popup Window")
+
+        self.button = QPushButton("Close", self)
+        self.button.clicked.connect(self.close)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.button)
+        self.setLayout(layout)
 
 
 if __name__ == "__main__":
