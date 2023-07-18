@@ -6,7 +6,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtGui import QPainter, QPen, QColor
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
-from PyQt5.QtWidgets import QInputDialog, QLineEdit, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, QInputDialog, QLineEdit, QPushButton
 from PyQt5 import QtCore
 from PyQt5.QtCore import *
 from PyQt5.uic import loadUi
@@ -30,6 +30,7 @@ class Ui_MainWindow(QWidget):
         self.measuring = False
         self.paused = False
         self.points = []
+        self.distance = 0
 
 
 
@@ -64,21 +65,52 @@ class Ui_MainWindow(QWidget):
     #for capturing images
     def captureButtonClicked(self):
         frame = self.captureCurrentFrame()
-        image_name, ok = QInputDialog.getText(self, "Saving Image", "Enter image name:", QLineEdit.Normal, "")
-        if ok and image_name:
-            self.saveFrame(frame, image_name + ".jpg")
+        self.saveFrame(frame)
 
     def captureCurrentFrame(self):
         # Get the current frame from the graphics view
         pixmap = self.graphicsView.pixmap()
         return pixmap.toImage()
 
-    def saveFrame(self, frame, filename):
-        save_path = "Images"
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        file_path = os.path.join(save_path, filename)
-        frame.save(file_path)
+    def saveFrame(self, frame):
+        app = QApplication.instance()
+        app.setWindowIcon(QIcon("PolyVisionLogo.png"))
+        if app is None:
+            app = QApplication([])
+
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        file_dialog = QFileDialog()
+        file_dialog.setOptions(options)
+        file_dialog.setLabelText(QFileDialog.Accept, "Save")
+        file_dialog.setWindowTitle("Save Image")
+        file_dialog.setNameFilter("JPEG files (*.jpg);;PNG files (*.png);;All files (*.*)")
+        file_dialog.setFileMode(QFileDialog.AnyFile)
+        file_dialog.setDefaultSuffix(".jpg")
+        file_dialog.setAcceptMode(QFileDialog.AcceptSave)
+        file_dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons)
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            None, "Save Image", "", "JPEG files (*.jpg);;PNG files (*.png);;All files (*.*)", options=options
+        )
+
+       
+        if file_path:
+            if not file_path.endswith((".jpg", ".jpeg", ".png")):
+                file_path = file_path+".jpg"
+            file_extension = file_path.split(".")[-1]
+            image_format = QImageWriter.supportedImageFormats()
+            if file_extension == "jpg" and b"jpeg" in image_format:
+                file_extension = "jpeg"
+
+            if file_extension.lower() in [fmt.data().decode() for fmt in image_format]:
+                frame.save(file_path, file_extension.upper())
+                print("Image saved successfully.")
+            else:
+                print("Unsupported file format.")
+
+        if not QApplication.instance():
+            sys.exit(app.exec_())
 
 
     #start measuring
@@ -95,12 +127,15 @@ class Ui_MainWindow(QWidget):
 
     #stop measuring
     def stopMeasureLength(self):
-        print("Stop measurement called")  # Add th
+        print("Stop measurement called")
         self.measuring = False
         self.measureButton.setText("Measure")
         QApplication.setOverrideCursor(QCursor(Qt.ArrowCursor))
         self.paused = False
         self.lengthLabel.setVisible(False)
+        print('Total Distance:',self.distance, 'pixels')
+        print('Total Distance:',self.distance*0.0084, 'milimeters')
+        self.distance = 0
         
 
     def mousePressEvent(self, event):
@@ -129,12 +164,14 @@ class Ui_MainWindow(QWidget):
         pixmap = self.graphicsView.pixmap()
         if pixmap is None:
             return
-
+        distance = []
+        distanceLoc = 0
         qimage = pixmap.toImage()
         painter = QPainter(qimage)
         pen = QPen(QColor(211,211, 211), 1)
         pen.setDashPattern([2, 2, 2, 2])
         painter.setPen(pen)
+
         # Draw lines based on stored points
         for i in range(len(self.points) - 1):
             pt1 = self.points[i]
@@ -143,11 +180,18 @@ class Ui_MainWindow(QWidget):
             self.lengthLabel.setGeometry(QtCore.QRect((pt2[0]+255), (pt2[1]+80), 50, 22))
             self.lengthLabel.setAlignment(Qt.AlignCenter)
             self.lengthLabel.setStyleSheet("background-color: rgba(255, 255, 255, 128);")
-            distance = np.sqrt((self.points[-1][0] - self.points[0][0]) ** 2 + (self.points[-1][1] - self.points[0][1]) ** 2)
-            formatted_distance = "{:.2f}".format(distance)
-            print('Total Distance:', formatted_distance, 'pixels')
-            self.lengthLabel.setText(str(formatted_distance))
             self.lengthLabel.setVisible(True)
+            distanceLoc = np.sqrt((pt2[0] - pt1[0]) ** 2 + (pt2[1] - pt2[1]) ** 2)
+            formatted_distance = "{:.2f}".format(distanceLoc)
+            print('Current Distance:', formatted_distance, 'pixels')
+            self.lengthLabel.setText(str(formatted_distance))
+
+        print('Outside:', distanceLoc, 'pixels')
+        distance.append(distanceLoc)
+
+        for i in range(len(distance)):
+            self.distance = self.distance + distance[i]
+
         painter.end()
         pixmap = QPixmap.fromImage(qimage)
         self.graphicsView.setPixmap(pixmap)
@@ -177,24 +221,32 @@ class Ui_MainWindow(QWidget):
         goToImgs.exec_()
 
     def moveUp(self):
-        self.focusValue.setText("upping") 
-        self.gcode_command = b"G21 G91 G1 Y10 F1000\r\n"  # Replace with your desired G-code command
-        self.ser.write(self.gcode_command)
+        if self.ser:
+            self.gcode_command = b"G21 G91 G1 Y10 F1000\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
 
     def moveDown(self):
-        self.focusValue.setText("downing") 
-        self.gcode_command = b"G21 G91 G1 Y-10 F1000\r\n"  # Replace with your desired G-code command
-        self.ser.write(self.gcode_command)
+        if self.ser: 
+            self.gcode_command = b"G21 G91 G1 Y-10 F1000\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
 
     def moveLeft(self):
-        self.focusValue.setText("lefting") 
-        self.gcode_command = b"G21 G91 G1 X10 F1000\r\n"  # Replace with your desired G-code command
-        self.ser.write(self.gcode_command)
+        if self.ser:
+            self.gcode_command = b"G21 G91 G1 X10 F1000\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
 
     def moveRight(self):
-        self.focusValue.setText("righting") 
-        self.gcode_command = b"G21 G91 G1 X-10 F1000\r\n"  # Replace with your desired G-code command
-        self.ser.write(self.gcode_command)
+        if self.ser:
+            self.gcode_command = b"G21 G91 G1 X-10 F1000\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
         
     def closeEvent(self, event):
         self.videoCapture.stop()
@@ -242,7 +294,7 @@ class Ui_MainWindow(QWidget):
         self.currentStatus      =   QtWidgets.QLabel(self.centralwidget)
         self.boxWidget          =   QtWidgets.QLabel(self.centralwidget)
         self.xWidget            =   QtWidgets.QLabel(self.centralwidget)
-        self.yWidget            =   QtWidgets.QLabel(self.centralwidget)
+        #self.yWidget            =   QtWidgets.QLabel(self.centralwidget)
         self.zWidget            =   QtWidgets.QLabel(self.centralwidget)
         self.xLabel             =   QtWidgets.QLabel(self.centralwidget)
         self.xValue             =   QtWidgets.QLabel(self.centralwidget)
@@ -439,7 +491,7 @@ class Ui_MainWindow(QWidget):
         self.grblHOME.setStyleSheet(u"QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 10px;\n""    border-radius: 1px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.boxWidget.setStyleSheet(u"\n""border: 2px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.xWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
-        self.yWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
+        #self.yWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.zWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.connectGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         #======================BUTTON ACTIONS===========================#
@@ -661,10 +713,94 @@ class SettingsWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.button = QPushButton("Close", self)
-        self.button.clicked.connect(self.close)
         self.resize(1000,800)
         self.setWindowIcon(QIcon("PolyVisionLogo.png"))
+        
+         # Set the background color for the window
+        palette = self.palette()
+        palette.setColor(QPalette.Background, QColor("#FFFFFF"))
+        self.setAutoFillBackground(True)
+        self.setPalette(palette)
+
+        main_layout = QVBoxLayout()
+        # Image Acquisition Settings
+        image_acquisition_group = QGroupBox("Image Acquisition Settings")
+        image_acquisition_layout = QVBoxLayout()
+
+        exposure_label = QLabel("Exposure Time:")
+        exposure_spinbox = QSpinBox()
+        exposure_spinbox.setRange(1, 1000)
+        image_acquisition_layout.addWidget(exposure_label)
+        image_acquisition_layout.addWidget(exposure_spinbox)
+
+        resolution_label = QLabel("Resolution:")
+        resolution_spinbox = QSpinBox()
+        resolution_spinbox.setRange(1, 10000)
+        image_acquisition_layout.addWidget(resolution_label)
+        image_acquisition_layout.addWidget(resolution_spinbox)
+
+        image_acquisition_group.setLayout(image_acquisition_layout)
+        main_layout.addWidget(image_acquisition_group)
+
+        # GRBL Controller Settings
+        grbl_controller_group = QGroupBox("GRBL Controller Settings")
+        grbl_controller_layout = QVBoxLayout()
+
+        steps_label = QLabel("Steps per Unit:")
+        steps_spinbox = QSpinBox()
+        steps_spinbox.setRange(1, 1000)
+        grbl_controller_layout.addWidget(steps_label)
+        grbl_controller_layout.addWidget(steps_spinbox)
+
+        feed_rate_label = QLabel("Maximum Feed Rate:")
+        feed_rate_spinbox = QSpinBox()
+        feed_rate_spinbox.setRange(1, 1000)
+        grbl_controller_layout.addWidget(feed_rate_label)
+        grbl_controller_layout.addWidget(feed_rate_spinbox)
+
+        grbl_controller_group.setLayout(grbl_controller_layout)
+        main_layout.addWidget(grbl_controller_group)
+
+        # Microplastics Detection Settings
+        microplastics_detection_group = QGroupBox("Microplastics Detection Settings")
+        microplastics_detection_layout = QVBoxLayout()
+
+        threshold_label = QLabel("Detection Threshold:")
+        threshold_slider = QSlider(Qt.Horizontal)
+        threshold_slider.setRange(0, 100)
+        threshold_slider.setValue(50)
+        microplastics_detection_layout.addWidget(threshold_label)
+        microplastics_detection_layout.addWidget(threshold_slider)
+
+        machine_learning_label = QLabel("Machine Learning Algorithm:")
+        machine_learning_options = ["Option 1", "Option 2", "Option 3"]
+        machine_learning_combobox = QComboBox()
+        machine_learning_combobox.addItems(machine_learning_options)
+        microplastics_detection_layout.addWidget(machine_learning_label)
+        microplastics_detection_layout.addWidget(machine_learning_combobox)
+
+        microplastics_detection_group.setLayout(microplastics_detection_layout)
+        main_layout.addWidget(microplastics_detection_group)
+
+        # Other settings groups can be added in a similar manner
+
+        # Apply and Close buttons
+        button_layout = QHBoxLayout()
+        self.apply_button = QPushButton("Apply")
+        self.apply_button.clicked.connect(self.applySettings)
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.close)
+        button_layout.addStretch(1)
+        button_layout.addWidget(self.apply_button)
+        button_layout.addWidget(self.close_button)
+
+        main_layout.addLayout(button_layout)
+
+        self.setLayout(main_layout)
+
+    def applySettings(self):
+        # Implement the logic to apply the settings here
+        print("Settings applied")
 
 class ImagesWindow(QDialog):
      def __init__(self, parent=None):
