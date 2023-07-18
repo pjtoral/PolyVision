@@ -11,8 +11,10 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import *
 from PyQt5.uic import loadUi
 import cv2
-import numpy as np 
-
+import numpy as np
+import serial.tools.list_ports
+import serial
+import time
 
 class Ui_MainWindow(QWidget):
     
@@ -21,6 +23,9 @@ class Ui_MainWindow(QWidget):
         self.VideoCapture = VideoCapture()
         self.VideoCapture.start() #creating a simultaneous thread 
         self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
+        self.available_ports = list(serial.tools.list_ports.comports())
+        self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
+        self.ser = None
         self.blurThreshold = 20 
         self.measuring = False
         self.paused = False
@@ -148,7 +153,17 @@ class Ui_MainWindow(QWidget):
         self.graphicsView.setPixmap(pixmap)
 
 
-
+    #accessing COM ports
+    def serialConnect(self):
+        self.port = self.dropDown.currentText().split(" - ")[0]  # Extract the COM port
+        print("Selected COM port:", self.port)
+        
+        try:
+            self.ser = serial.Serial(self.port, baudrate=115200)
+            time.sleep(2)
+            print("Connected to GRBL")
+        except serial.SerialException as e:
+            print("Error opening serial port:", e)
 
     def mouseReleaseEvent(self, event):
         pass
@@ -163,16 +178,24 @@ class Ui_MainWindow(QWidget):
 
     def moveUp(self):
         self.focusValue.setText("upping") 
+        self.gcode_command = b"G21 G91 G1 Y10 F1000\r\n"  # Replace with your desired G-code command
+        self.ser.write(self.gcode_command)
 
     def moveDown(self):
         self.focusValue.setText("downing") 
+        self.gcode_command = b"G21 G91 G1 Y-10 F1000\r\n"  # Replace with your desired G-code command
+        self.ser.write(self.gcode_command)
 
     def moveLeft(self):
         self.focusValue.setText("lefting") 
+        self.gcode_command = b"G21 G91 G1 X10 F1000\r\n"  # Replace with your desired G-code command
+        self.ser.write(self.gcode_command)
 
     def moveRight(self):
         self.focusValue.setText("righting") 
-
+        self.gcode_command = b"G21 G91 G1 X-10 F1000\r\n"  # Replace with your desired G-code command
+        self.ser.write(self.gcode_command)
+        
     def closeEvent(self, event):
         self.videoCapture.stop()
         self.videoCapture.wait()
@@ -226,6 +249,10 @@ class Ui_MainWindow(QWidget):
         self.yLabel             =   QtWidgets.QLabel(self.centralwidget)
         self.yValue             =   QtWidgets.QLabel(self.centralwidget)
         self.applTitle          =   QtWidgets.QLabel(self.centralwidget)
+        self.dropDown           =   QtWidgets.QComboBox(self.centralwidget)
+
+        self.dropDown.addItems(self.comports)
+        self.dropDown.setFocusPolicy(Qt.NoFocus)
         self.centralwidget.setObjectName("centralwidget")
         self.progressBar.setProperty("value", 16)
         self.progressBar.setObjectName("progressBar")
@@ -384,6 +411,7 @@ class Ui_MainWindow(QWidget):
         self.grblLEFT           = QtWidgets.QPushButton(self.centralwidget) 
         self.grblRIGHT          = QtWidgets.QPushButton(self.centralwidget) 
         self.grblHOME           = QtWidgets.QPushButton(self.centralwidget)
+        self.connectGRBL        = QtWidgets.QPushButton(self.centralwidget)
 
         self.captureButton.setObjectName("captureButton")
         self.measureButton.setObjectName("measureButton")
@@ -396,12 +424,14 @@ class Ui_MainWindow(QWidget):
         self.imagesButton.setObjectName("imagesButton")
         self.statisticsButton.setObjectName("statisticsButton")
         self.settingsButton.setObjectName("settingsButton")
+        self.connectGRBL.setObjectName("connectGRBL")
         self.captureButton.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.measureButton.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.detectButton.setStyleSheet("QPushButton {\n""background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 133, 63, 255), stop:0.909091 rgba(255, 255, 255, 167));\n""    color: #000000;\n""    font: bold 16px;\n""    border-radius: 0px;\n""    border-color: #FFFFFF;\n""}\n""QPushButton:hover {\n""   \n""    color: #FFFFFF;\n""}\n""")
         self.imagesButton.setStyleSheet("QPushButton {\n""    background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 133, 63, 255), stop:0.909091 rgba(255, 255, 255, 167));\n""    color: #000000;\n""    font: bold 16px;\n""    border-radius: 0px;\n""    border-color: #FFFFFF;\n""}\n""QPushButton:hover {\n""   \n""    color: #FFFFFF;\n""}\n""")
         self.statisticsButton.setStyleSheet("QPushButton {\n""    background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 133, 63, 255), stop:0.909091 rgba(255, 255, 255, 167));\n""    color: #000000;\n""    font: bold 16px;\n""    border-radius: 0px;\n""    border-color: #FFFFFF;\n""}\n""QPushButton:hover {\n""   \n""    color: #FFFFFF;\n""}\n""")          
         self.settingsButton.setStyleSheet("QPushButton {\n""    background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 133, 63, 255), stop:0.909091 rgba(255, 255, 255, 167));\n""    color: #000000;\n""    font: bold 16px;\n""    border-radius: 0px;\n""    border-color: #FFFFFF;\n""}\n""QPushButton:hover {\n""   \n""    color: #FFFFFF;\n""}\n""")
+        self.dropDown.setStyleSheet(''' QComboBox {border: 1px solid #ccc;border-radius: 5px;padding: 1px;background-color: #ffffff;color: #000000;font-size: 12px;}QComboBox::drop-down {subcontrol-origin: padding;subcontrol-position: top right;width: 20px;}''')
         self.grblUP.setStyleSheet(u"QPushButton {\n""       background-color: qconicalgradient(cx:0.5, cy:0, angle:90.9, stop:0 rgba(255, 255, 255, 255), stop:0.37223 rgba(255, 255, 255, 255), stop:0.373991 rgba(251, 191, 22, 255), stop:0.62362 rgba(253, 202, 22, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 1px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""     background-color: qconicalgradient(cx:0.5, cy:0, angle:90.9, stop:0 rgba(255, 255, 255, 255), stop:0.37223 rgba(255, 255, 255, 255), stop:0.373991 rgba(158, 120, 14, 255), stop:0.62362 rgba(158, 120, 14, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""}")
         self.grblDOWN.setStyleSheet(u"QPushButton {\n""    background-color: qconicalgradient(cx:0.494318, cy:1, angle:270, stop:0 rgba(255, 255, 255, 255), stop:0.373989 rgba(255, 255, 255, 255), stop:0.373991 rgba(252, 191, 22, 255), stop:0.623986 rgba(252, 191, 22, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 1px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: qconicalgradient(cx:0.494318, cy:1, angle:270, stop:0 rgba(255, 255, 255, 255), stop:0.37223 rgba(255, 255, 255, 255), stop:0.373991 rgba(158, 120, 14, 255), stop:0.62362 rgba(158, 120, 14, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""}")
         self.grblLEFT.setStyleSheet(u"QPushButton {\n""     background-color: qconicalgradient(cx:0, cy:0.499, angle:180.1, stop:0 rgba(255, 255, 255, 255), stop:0.375488 rgba(255, 255, 255, 255), stop:0.375911 rgba(252, 191, 22, 255), stop:0.622911 rgba(251, 191, 22, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 1px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: qconicalgradient(cx:0, cy:0.499, angle:180.1, stop:0 rgba(255, 255, 255, 255), stop:0.37548 rgba(255, 255, 255, 255), stop:0.375626 rgba(158, 120, 14, 255), stop:0.622911 rgba(158, 120, 14, 255), stop:0.624043 rgba(255, 255, 255, 255), stop:1 rgba(255, 255, 255, 255));\n""}")
@@ -411,7 +441,7 @@ class Ui_MainWindow(QWidget):
         self.xWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.yWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.zWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
-        
+        self.connectGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         #======================BUTTON ACTIONS===========================#
         self.captureButton.clicked.connect(self.captureButtonClicked)
         self.grblUP.clicked.connect(self.moveUp)
@@ -424,6 +454,7 @@ class Ui_MainWindow(QWidget):
         self.measureButton.clicked.connect(self.measureLength)
         self.graphicsView.mousePressEvent = self.mousePressEvent
         self.graphicsView.mouseReleaseEvent = self.mouseReleaseEvent
+        self.connectGRBL.clicked.connect(self.serialConnect)
         #======================APP&LOGOS COORDNT========================#
         self.applTitle       .setGeometry(QtCore.QRect(100, 70, 140, 30))
         self.appLogo         .setGeometry(QtCore.QRect(30, 60, 60, 50))
@@ -466,8 +497,8 @@ class Ui_MainWindow(QWidget):
         self.measureButton   .setGeometry(QtCore.QRect(1750, 570, 140, 50))
         #======================GRBL COORDINATES=========================#
         self.boxWidget       .setGeometry(QtCore.QRect(1595, 640, 300, 220))
-        self.xWidget         .setGeometry(QtCore.QRect(1765, 690, 115, 72))
-        self.yWidget         .setGeometry(QtCore.QRect(1765, 767, 115, 72))
+        self.xWidget         .setGeometry(QtCore.QRect(1765, 690, 115, 150))
+        #self.yWidget         .setGeometry(QtCore.QRect(1765, 767, 115, 72))
         self.zWidget         .setGeometry(QtCore.QRect(1610, 690, 150, 150))
         self.grblTitle       .setGeometry(QtCore.QRect(1660, 650, 180, 30))
         self.grblUP          .setGeometry(QtCore.QRect(1665, 695, 43, 43))
@@ -479,12 +510,13 @@ class Ui_MainWindow(QWidget):
         self.xValue          .setGeometry(QtCore.QRect(1807, 703, 70, 20))
         self.yLabel          .setGeometry(QtCore.QRect(1777, 727, 45, 20))
         self.yValue          .setGeometry(QtCore.QRect(1807, 727, 70, 20))
+        self.dropDown        .setGeometry(QtCore.QRect(1773, 755, 100,30))
         #====================SETTINGS COORDINATES=========================#
         self.detectButton    .setGeometry(QtCore.QRect(0, 170, 261, 41))
         self.imagesButton    .setGeometry(QtCore.QRect(0, 260, 261, 41))
         self.statisticsButton.setGeometry(QtCore.QRect(0, 350, 261, 41))
         self.settingsButton  .setGeometry(QtCore.QRect(0, 440, 261, 41))
-
+        self.connectGRBL     .setGeometry(QtCore.QRect(1773, 795, 100,30))
         #====================menuBar============================#
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -601,6 +633,7 @@ class Ui_MainWindow(QWidget):
         self.xValue.setText(_translate("MainWindow","1000.00"))
         self.yLabel.setText(_translate("MainWindow","Y  :"))
         self.yValue.setText(_translate("MainWindow","1000.00"))
+        self.connectGRBL.setText(_translate("MainWindow","Connect"))
 
 class VideoCapture(QThread):
     ImageUpdate = pyqtSignal(QImage)
