@@ -27,9 +27,9 @@ class Ui_MainWindow(QWidget):
     
     def __init__(self):
         super().__init__()
-        self.VideoCapture = VideoCapture()
-        self.VideoCapture.start() #creating a simultaneous thread 
-        self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
+        #self.VideoCapture = VideoCapture()
+        #self.VideoCapture.start() #creating a simultaneous thread 
+        #self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
@@ -233,9 +233,12 @@ class Ui_MainWindow(QWidget):
         self.settings.show()
 
     def goToCurrentImages(self):
-        print(self.file_name)
-        self.images = ImagesUI(self.file_name)
-        self.images.show()
+        #print(self.file_name)
+        self.images = ImagesUI("carcar")
+        self.images.exec_()
+
+
+        
 
 
     def moveUp(self):
@@ -745,7 +748,7 @@ class Ui_MainWindow(QWidget):
         self.grblRIGHT.setEnabled(False)
         self.grblHOME.setEnabled(False)
         self.connectGRBL.setEnabled(False)
-        self.imagesButton.setEnabled(False)
+        self.imagesButton.setEnabled(True)
         self.detectButton.setEnabled(False)
         self.statisticsButton.setEnabled(False)
         
@@ -881,6 +884,7 @@ class ImagesWindow(QDialog):
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
