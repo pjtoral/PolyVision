@@ -12,9 +12,16 @@ from PyQt5.QtCore import *
 from PyQt5.uic import loadUi
 import cv2
 import numpy as np
-import serial.tools.list_ports
 import serial
+import serial.tools.list_ports
 import time
+from Settings import SettingsUI
+from Images import ImagesUI
+from NewFile import NewFileUI
+from Database import *
+from Capture import *
+
+
 
 class Ui_MainWindow(QWidget):
     
@@ -26,12 +33,11 @@ class Ui_MainWindow(QWidget):
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
-        self.blurThreshold = 20 
+        self.blurThreshold = 8 
         self.measuring = False
-        self.paused = False
+        self.paused = True
         self.points = []
         self.distance = 0
-
 
 
     #updating live feed in different Thread
@@ -62,58 +68,62 @@ class Ui_MainWindow(QWidget):
     def CancelFeed(self):
         self.ImageCapture.stop()
 
+
+
     #for capturing images
     def captureButtonClicked(self):
-        frame = self.captureCurrentFrame()
-        self.saveFrame(frame)
+        self.frame = self.captureCurrentFrame()
+        self.paused = True
+        self.capture = CaptureUI()
+        self.capture.length_clicked.connect(self.onLengthClicked)
+        self.capture.width_clicked.connect(self.onWidthClicked)
+        self.capture.save_clicked.connect(self.saving)
+        self.capture.exec_() 
+
 
     def captureCurrentFrame(self):
         # Get the current frame from the graphics view
         pixmap = self.graphicsView.pixmap()
         return pixmap.toImage()
 
+    def saving(self):
+        self.saveFrame(self.frame)
+
+
     def saveFrame(self, frame):
-        app = QApplication.instance()
-        app.setWindowIcon(QIcon("PolyVisionLogo.png"))
-        if app is None:
-            app = QApplication([])
+        particle_name = self.capture.particle_name_edit.text()
+        length = self.capture.length_edit.text()
+        width= self.capture.width_edit.text()
+        color= self.capture.color_edit.text()
+        shape = self.capture.shape_edit.text()
+        magnification = self.capture.magnification_edit.text()
+        note = self.capture.note_edit.text()
 
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        file_dialog = QFileDialog()
-        file_dialog.setOptions(options)
-        file_dialog.setLabelText(QFileDialog.Accept, "Save")
-        file_dialog.setWindowTitle("Save Image")
-        file_dialog.setNameFilter("JPEG files (*.jpg);;PNG files (*.png);;All files (*.*)")
-        file_dialog.setFileMode(QFileDialog.AnyFile)
-        file_dialog.setDefaultSuffix(".jpg")
-        file_dialog.setAcceptMode(QFileDialog.AcceptSave)
-        file_dialog.setOption(QFileDialog.DontUseCustomDirectoryIcons)
+        
+        file_type = self.capture.photo_options_combo.currentText()
+        frame_filename = f"{particle_name}.{file_type.upper()}" 
+        print(file_type)
+        save_folder = self.file_name  #path to folder
+        if not os.path.exists(save_folder):
+            os.makedirs(save_folder)
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            None, "Save Image", "", "JPEG files (*.jpg);;PNG files (*.png);;All files (*.*)", options=options
-        )
+        save_path = os.path.join(save_folder, frame_filename)
+        self.frame.save(save_path)
+        insert_data(self.file_name, save_path,particle_name, length, width, color, shape, magnification, note)
+        self.capture.close()
+        self.paused = False
 
-       
-        if file_path:
-            if not file_path.endswith((".jpg", ".jpeg", ".png")):
-                file_path = file_path+".jpg"
-            file_extension = file_path.split(".")[-1]
-            image_format = QImageWriter.supportedImageFormats()
-            if file_extension == "jpg" and b"jpeg" in image_format:
-                file_extension = "jpeg"
-
-            if file_extension.lower() in [fmt.data().decode() for fmt in image_format]:
-                frame.save(file_path, file_extension.upper())
-                print("Image saved successfully.")
-            else:
-                print("Unsupported file format.")
-
-        if not QApplication.instance():
-            sys.exit(app.exec_())
+    def onLengthClicked(self):
+        self.lengthClicked = 1
+        self.measureLength()
 
 
-    #start measuring
+    def onWidthClicked(self):
+        self.widthClicked = 1
+        self.measureLength()
+
+
+    #start-measuring
     def measureLength(self):
        if not self.measuring:
             self.measuring = True
@@ -124,18 +134,28 @@ class Ui_MainWindow(QWidget):
             self.paused = True
        else:
             self.stopMeasureLength()
+            self.graphicsView.setPixmap(QPixmap.fromImage(self.frame))
 
-    #stop measuring
+
+    #stop-measuring
     def stopMeasureLength(self):
         print("Stop measurement called")
         self.measuring = False
         self.measureButton.setText("Measure")
         QApplication.setOverrideCursor(QCursor(Qt.ArrowCursor))
-        self.paused = False
+        #self.paused = False
         self.lengthLabel.setVisible(False)
         print('Total Distance:',self.distance, 'pixels')
         print('Total Distance:',self.distance*0.0084, 'milimeters')
-        self.distance = 0
+        if self.lengthClicked == 1:
+            self.capture.length_edit.setText(str(self.distance * 0.0084))
+            self.lengthClicked = 0
+        elif self.widthClicked == 1:
+            self.capture.width_edit.setText(str(self.distance * 0.0084))
+            self.widthClicked = 0
+        self.capture.show()
+        self.distance = 0 
+        
         
 
     def mousePressEvent(self, event):
@@ -160,7 +180,6 @@ class Ui_MainWindow(QWidget):
     def paintEvent(self):
         if not self.paused:
             return
-
         pixmap = self.graphicsView.pixmap()
         if pixmap is None:
             return
@@ -171,7 +190,6 @@ class Ui_MainWindow(QWidget):
         pen = QPen(QColor(211,211, 211), 1)
         pen.setDashPattern([2, 2, 2, 2])
         painter.setPen(pen)
-
         # Draw lines based on stored points
         for i in range(len(self.points) - 1):
             pt1 = self.points[i]
@@ -181,17 +199,16 @@ class Ui_MainWindow(QWidget):
             self.lengthLabel.setAlignment(Qt.AlignCenter)
             self.lengthLabel.setStyleSheet("background-color: rgba(255, 255, 255, 128);")
             self.lengthLabel.setVisible(True)
-            distanceLoc = np.sqrt((pt2[0] - pt1[0]) ** 2 + (pt2[1] - pt2[1]) ** 2)
+            distanceLoc = np.sqrt((pt2[0] - pt1[0]) ** 2 + (pt2[1] - pt1[1]) ** 2)
             formatted_distance = "{:.2f}".format(distanceLoc)
             print('Current Distance:', formatted_distance, 'pixels')
-            self.lengthLabel.setText(str(formatted_distance))
-
         print('Outside:', distanceLoc, 'pixels')
         distance.append(distanceLoc)
-
         for i in range(len(distance)):
             self.distance = self.distance + distance[i]
-
+        distanceShow = self.distance*0.0084
+        formatted_distance = "{:.2f}".format(distanceShow)
+        self.lengthLabel.setText(str(formatted_distance))
         painter.end()
         pixmap = QPixmap.fromImage(qimage)
         self.graphicsView.setPixmap(pixmap)
@@ -201,7 +218,6 @@ class Ui_MainWindow(QWidget):
     def serialConnect(self):
         self.port = self.dropDown.currentText().split(" - ")[0]  # Extract the COM port
         print("Selected COM port:", self.port)
-        
         try:
             self.ser = serial.Serial(self.port, baudrate=115200)
             time.sleep(2)
@@ -213,12 +229,14 @@ class Ui_MainWindow(QWidget):
         pass
 
     def goToSettings(self):
-        goToSets = SettingsWindow(self)
-        goToSets.exec_()
+        self.settings = SettingsUI()
+        self.settings.show()
 
     def goToCurrentImages(self):
-        goToImgs = ImagesWindow(self)
-        goToImgs.exec_()
+        print(self.file_name)
+        self.images = ImagesUI(self.file_name)
+        self.images.show()
+
 
     def moveUp(self):
         if self.ser:
@@ -253,12 +271,42 @@ class Ui_MainWindow(QWidget):
         self.videoCapture.wait()
         event.accept()
 
+    def on_new_action(self):
+        new_file_widget = NewFileUI()
+        if new_file_widget.exec_() == QtWidgets.QDialog.Accepted:
+            self.file_name = new_file_widget.file_name_edit.text()
+            location = new_file_widget.location_edit.text()
+            sampling_date = new_file_widget.sampling_date_edit.text()
+            self.placeValue.setText(self.file_name)        
+            self.locationValue.setText(location)
+            self.dateValue.setText(sampling_date)
+            add_database_entry(self.file_name, f"{location}/microplastic.db", sampling_date)
+            create_microplastics_database(self.file_name)
+            self.paused = False
+            self.statusValue.setText("Scanning...")
+            self.detectionValue.setText("ON")
+            self.captureButton.setEnabled(True)
+            self.grblUP.setEnabled(True)
+            self.grblUP.setEnabled(True)
+            self.grblDOWN.setEnabled(True)
+            self.grblLEFT.setEnabled(True)
+            self.grblRIGHT.setEnabled(True)
+            self.grblHOME.setEnabled(True)
+            self.connectGRBL.setEnabled(True)
+            self.imagesButton.setEnabled(True)
+            self.detectButton.setEnabled(True)
+            self.statisticsButton.setEnabled(True)
+        
+
+
+
+
     #defining pyQt5 widgets
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.showMaximized()
         MainWindow.setStyleSheet("background-color: rgb(255, 255, 255);")
-        MainWindow.setWindowIcon(QIcon("PolyVisionLogo.png"))
+        MainWindow.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
         #instantiation of items
         self.centralwidget      =   QtWidgets.QWidget(MainWindow)
         self.progressBar        =   QtWidgets.QProgressBar(self.centralwidget) #for progress
@@ -384,7 +432,7 @@ class Ui_MainWindow(QWidget):
         self.filmLabel.setObjectName("filmLabel")    
         self.applTitle.setObjectName("applTitle")
         self.appLogo = QtWidgets.QLabel(self.centralwidget)    
-        self.appLogo.setPixmap(QtGui.QPixmap("PolyVisionLogo"))
+        self.appLogo.setPixmap(QtGui.QPixmap("res/PolyVisionLogo.png"))
         self.appLogo.setScaledContents(True)
         self.appLogo.setObjectName("appLogo")
         self.filamentValue = QtWidgets.QLabel(self.centralwidget)    
@@ -614,17 +662,13 @@ class Ui_MainWindow(QWidget):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "PolyVision"))
-        self.placeValue.setText(_translate("MainWindow", "Carcar Sample #3"))
+
+        #Labels
         self.locationLabel.setText(_translate("MainWindow", "Location:"))
-        self.locationValue.setText(_translate("MainWindow", "Carcar Mangroove"))
         self.dataLabel.setText(_translate("MainWindow", "Date Sampled:"))
-        self.dateValue.setText(_translate("MainWindow", "6/26/2023"))
         self.focusLabel.setText(_translate("MainWindow", "Focus:"))
-        self.focusValue.setText(_translate("MainWindow", "100%"))
         self.statusLabel.setText(_translate("MainWindow", "Status:"))
-        self.statusValue.setText(_translate("MainWindow", "Scanning..."))
         self.detectionLabel.setText(_translate("MainWindow", "Auto Detection:"))
-        self.detectionValue.setText(_translate("MainWindow", "ON"))
         self.progressLabel.setText(_translate("MainWindow", "Progress:"))
         self.realTimeLabel.setText(_translate("MainWindow", "Real-Time Report"))
         self.currentStatus.setText(_translate("MainWindow", "Current Status"))
@@ -632,17 +676,11 @@ class Ui_MainWindow(QWidget):
         self.highLabel.setText(_translate("MainWindow", "High:"))
         self.moderateLabel.setText(_translate("MainWindow", "Moderate:"))
         self.lowLabel.setText(_translate("MainWindow", "Low:"))
-        self.highValue.setText(_translate("MainWindow", "3"))
-        self.moderateValue.setText(_translate("MainWindow", "2"))
-        self.lowValue.setText(_translate("MainWindow", "1"))
         self.classLabel.setText(_translate("MainWindow", "Likely Classes"))
         self.filamentLabel.setText(_translate("MainWindow", "Filaments:"))
         self.fragmentLabel.setText(_translate("MainWindow", "Fragments:"))
-        self.filmValue.setText(_translate("MainWindow", "2"))
-        self.fragmentValue.setText(_translate("MainWindow", "3"))
         self.filmLabel.setText(_translate("MainWindow", "Films:"))
         self.applTitle.setText(_translate("MainWindow", "PolyVision"))
-        self.filamentValue.setText(_translate("MainWindow", "1"))
         self.captureButton.setText(_translate("MainWindow", "Capture"))
         self.measureButton.setText(_translate("MainWindow", "Measure"))
         self.grblUP.setText(_translate("MainWindow", "↑"))
@@ -658,34 +696,61 @@ class Ui_MainWindow(QWidget):
         self.imagesButton.setText(_translate("MainWindow", "Images"))
         self.statisticsButton.setText(_translate("MainWindow", "Statistics"))
         self.settingsButton.setText(_translate("MainWindow", "Settings"))
-        self.menuFile.setTitle(_translate("MainWindow", "File"))
-        self.menuEdit.setTitle(_translate("MainWindow", "Edit"))
-        self.actionNew.setText(_translate("MainWindow", "New"))
-        self.actionNew.setStatusTip(_translate("MainWindow", "Create New file"))
-        self.actionNew.setShortcut(_translate("MainWindow", "Ctrl+N"))
-        self.actionSave.setText(_translate("MainWindow", "Save"))
-        self.actionSave.setStatusTip(_translate("MainWindow", "Save current file"))
-        self.actionSave.setShortcut(_translate("MainWindow", "Ctrl+S"))
-        self.actionSave_As.setText(_translate("MainWindow", "Save As"))
-        self.actionSave_As.setStatusTip(_translate("MainWindow", "Save a file as..."))
-        self.actionSave_As.setShortcut(_translate("MainWindow", "Ctrl+Shift+S"))
-        self.actionUndo.setText(_translate("MainWindow", "Undo"))
-        self.actionUndo.setStatusTip(_translate("MainWindow", "Undo edits"))
-        self.actionUndo.setShortcut(_translate("MainWindow", "Ctrl+Z"))
-        self.actionRedo.setText(_translate("MainWindow", "Redo"))
-        self.actionRedo.setStatusTip(_translate("MainWindow", "Redo edit"))
-        self.actionRedo.setShortcut(_translate("MainWindow", "Ctrl+Shift+Z"))
-        self.actionCopy.setText(_translate("MainWindow", "Copy"))
-        self.actionCopy.setStatusTip(_translate("MainWindow", "Copy a file"))
-        self.actionCopy.setShortcut(_translate("MainWindow", "Ctrl+C"))
-        self.actionPaste.setText(_translate("MainWindow", "Paste"))
-        self.actionPaste.setStatusTip(_translate("MainWindow", "Paste a file"))
-        self.actionPaste.setShortcut(_translate("MainWindow", "Ctrl+V"))
         self.xLabel.setText(_translate("MainWindow","X  :"))
         self.xValue.setText(_translate("MainWindow","1000.00"))
         self.yLabel.setText(_translate("MainWindow","Y  :"))
         self.yValue.setText(_translate("MainWindow","1000.00"))
         self.connectGRBL.setText(_translate("MainWindow","Connect"))
+
+
+        #Menu Bar
+        self.menuFile.setTitle(_translate("MainWindow", "File"))
+        self.menuEdit.setTitle(_translate("MainWindow", "Edit"))
+
+        self.actionSave.setText(_translate("MainWindow", "Save"))
+        self.actionSave.setStatusTip(_translate("MainWindow", "Save current file"))
+        self.actionSave.setShortcut(_translate("MainWindow", "Ctrl+S"))
+
+        self.actionSave_As.setText(_translate("MainWindow", "Save As"))
+        self.actionSave_As.setStatusTip(_translate("MainWindow", "Save a file as..."))
+        self.actionSave_As.setShortcut(_translate("MainWindow", "Ctrl+Shift+S"))
+
+        self.actionUndo.setText(_translate("MainWindow", "Undo"))
+        self.actionUndo.setStatusTip(_translate("MainWindow", "Undo edits"))
+        self.actionUndo.setShortcut(_translate("MainWindow", "Ctrl+Z"))
+
+        self.actionRedo.setText(_translate("MainWindow", "Redo"))
+        self.actionRedo.setStatusTip(_translate("MainWindow", "Redo edit"))
+        self.actionRedo.setShortcut(_translate("MainWindow", "Ctrl+Shift+Z"))
+
+        self.actionCopy.setText(_translate("MainWindow", "Copy"))
+        self.actionCopy.setStatusTip(_translate("MainWindow", "Copy a file"))
+        self.actionCopy.setShortcut(_translate("MainWindow", "Ctrl+C"))
+
+        self.actionPaste.setText(_translate("MainWindow", "Paste"))
+        self.actionPaste.setStatusTip(_translate("MainWindow", "Paste a file"))
+        self.actionPaste.setShortcut(_translate("MainWindow", "Ctrl+V"))
+
+        self.actionNew.setText(_translate("MainWindow", "New"))
+        self.actionNew.setStatusTip(_translate("MainWindow", "Create New file"))
+        self.actionNew.setShortcut(_translate("MainWindow", "Ctrl+N"))
+        self.actionNew.triggered.connect(self.on_new_action)
+
+        self.captureButton.setEnabled(False)
+        self.measureButton.setEnabled(False)
+        self.grblUP.setEnabled(False)
+        self.grblUP.setEnabled(False)
+        self.grblDOWN.setEnabled(False)
+        self.grblLEFT.setEnabled(False)
+        self.grblRIGHT.setEnabled(False)
+        self.grblHOME.setEnabled(False)
+        self.connectGRBL.setEnabled(False)
+        self.imagesButton.setEnabled(False)
+        self.detectButton.setEnabled(False)
+        self.statisticsButton.setEnabled(False)
+        
+        
+
 
 class VideoCapture(QThread):
     ImageUpdate = pyqtSignal(QImage)
@@ -703,7 +768,7 @@ class VideoCapture(QThread):
                 #FlippedImage = cv2.flip(FlippedImage, 1)
                 ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
                 #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD )
-                ImageScaled = ConvertToQtFormat.scaled(1280,720, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                ImageScaled = ConvertToQtFormat.scaled(1280,720, Qt.KeepAspectRatio)
                 self.ImageUpdate.emit(ImageScaled)
     def stop(self):
         self.ThreadActive = False
@@ -714,7 +779,7 @@ class SettingsWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.resize(1000,800)
-        self.setWindowIcon(QIcon("PolyVisionLogo.png"))
+        self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
         
          # Set the background color for the window
         palette = self.palette()
@@ -809,7 +874,7 @@ class ImagesWindow(QDialog):
         self.button = QPushButton("Close", self)
         self.button.clicked.connect(self.close)
         self.resize(1000,800)
-        self.setWindowIcon(QIcon("PolyVisionLogo.png"))
+        self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
 
 
 
