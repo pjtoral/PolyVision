@@ -238,9 +238,6 @@ class Ui_MainWindow(QWidget):
         self.images.exec_()
 
 
-        
-
-
     def moveUp(self):
         if self.ser:
             self.gcode_command = b"G21 G91 G1 Y10 F1000\r\n"

@@ -76,6 +76,26 @@ def get_data(database_name):
     connection.close()
     return data
 
+def get_image_data(database_name, particle_name):
+    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    connection = sqlite3.connect(microplastics_db_path)
+    particle_name = particle_name.split('.')[0]
+    c = connection.cursor()
+    c.execute("SELECT * FROM microplastics WHERE particle_name = ?", (particle_name,))
+    image_data = c.fetchall()
+    connection.close()
+
+    for row in image_data:
+        print("Particle Name:", row[1])
+        print("Length:", row[2])
+        print("Width:", row[3])
+        print("Color:", row[4])
+        print("Shape:", row[5])
+        print("Magnification:", row[6])
+        print("Note:", row[7])
+        print("--------------------")
+    return image_data
+
 # Function to update data in the microplastics table
 def update_data(database_name, particle_name, length, width, color, shape, magnification, note):
     microplastics_db_path = os.path.join(database_name, 'microplastic.db')
@@ -94,33 +114,6 @@ def delete_data(database_name, particle_name):
     c.execute("DELETE FROM microplastics WHERE particle_name=?", (particle_name,))
     connection.commit()
     connection.close()
-
-# Example usage:
-def main():
-    main_db_name = input("Enter the name of the main database (folder name): ")
-    if not main_db_name:
-        print("Please provide a valid folder name.")
-        return
-
-
-    # Add a new database entry to the main database
-    add_database_entry(main_db_name, f"{main_db_name}/microplastic.db", '2023-07-27')
-
-    # Create the microplastics database and table
-    create_microplastics_database(main_db_name)
-
-    # Insert data into the microplastics table (replace 'None' with your actual image binary data)
-    insert_data(main_db_name, None, 'Sample Particle', 10.2, 5.1, 'Blue', 'Round', 100, 'Some notes')
-
-    # Retrieve data from the microplastics table
-    data = get_data(main_db_name)
-    print(data)
-
-    # Update data in the microplastics table
-    update_data(main_db_name, 'Sample Particle', 11.0, 4.8, 'Green', 'Round', 150, 'Updated notes')
-
-    # Delete data from the microplastics table
-    delete_data(main_db_name, 'Sample Particle')
 
 if __name__ == "__main__":
     main()
