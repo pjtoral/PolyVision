@@ -68,7 +68,12 @@ def insert_data(database_name, image_loc, particle_name, length, width, color, s
 
 # Function to retrieve data from the microplastics table
 def get_data(database_name):
-    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+
+    if ".db" not in database_name:
+        microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    else:
+        microplastics_db_path = database_name
+        
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("SELECT * FROM microplastics")
@@ -96,13 +101,29 @@ def get_image_data(database_name, particle_name):
         print("--------------------")
     return image_data
 
-# Function to update data in the microplastics table
-def update_data(database_name, particle_name, length, width, color, shape, magnification, note):
+def update_all_data(database_name, particle_name, length, width, color, shape, magnification, note):
     microplastics_db_path = os.path.join(database_name, 'microplastic.db')
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("UPDATE microplastics SET length=?, width=?, color=?, shape=?, magnification=?, note=? WHERE particle_name=?",
               (length, width, color, shape, magnification, note, particle_name))
+    connection.commit()
+    connection.close()
+
+def update_table_data(database_name, particle_name, length, width, color, shape, row_id):
+    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    connection = sqlite3.connect(microplastics_db_path)
+    c = connection.cursor()
+    c.execute("UPDATE microplastics SET particle_name=?, length=?, width=?, color=?, shape=? WHERE ROWID=?",
+              (particle_name, length, width, color, shape, row_id))
+    connection.commit()
+    connection.close()
+
+def clear_table_data(database_name):
+    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    connection = sqlite3.connect(microplastics_db_path)
+    c = connection.cursor()
+    c.execute("UPDATE microplastics SET 'particle_name' = '', 'length' = '', 'width' = '', 'color' = '', 'shape' = ''")
     connection.commit()
     connection.close()
 

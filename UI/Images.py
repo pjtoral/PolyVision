@@ -194,9 +194,11 @@ class ImagesUI(QDialog):
             data = get_image_data(label.folder_path, label.image_name)
             if data is not None and len(data) > 0:
                 first_row = data[0]
-                self.particle_name_label.setText("Name: " + first_row[1])  
-                self.length_label.setText("Lenght: " +str(first_row[2]))
-                self.width_label.setText("Width: " +str(first_row[3]))  
+                self.particle_name_label.setText("Name: " + first_row[1]) 
+                formatted_length = "{:.4f}".format(first_row[2])
+                formatted_width = "{:.4f}".format(first_row[3]) 
+                self.length_label.setText("Length: " +str(formatted_length))
+                self.width_label.setText("Width: " +str(formatted_width))  
                 self.color_label.setText("Color: " +first_row[4])  
                 self.shape_label.setText("Shape: " +first_row[5]) 
                 self.magnification_label.setText("Magnification: " + str(first_row[6]) +"x")  
@@ -239,11 +241,15 @@ class ImagesUI(QDialog):
 
         for filename in os.listdir(folder_path):
             file_path = os.path.join(folder_path, filename)
+
+            if not self.is_image_file(file_path):
+                continue  
+                
             label = self.create_image_label(folder_path, file_path, filename, row, col)
             if self.apply_filters(label):
                 valid_labels.append(label)  
                 col += 1
-                if col == 4:  
+                if col == 5:  
                     row += 1
                     col = 0
             else:
