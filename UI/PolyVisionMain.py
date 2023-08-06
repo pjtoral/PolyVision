@@ -21,10 +21,13 @@ from NewFile import NewFileUI
 from Database import *
 from Capture import *
 from Settings import SettingsUI
+import json
+from PIL import ImageEnhance
+from SelfDestructingMessageBox import *
+from GridOverlay import GridOverlay
 
 
-
-class Ui_MainWindow(QWidget):
+class Ui_MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
@@ -40,6 +43,12 @@ class Ui_MainWindow(QWidget):
         self.points = []
         self.distance = 0
         self.capturing = False
+
+        with open("user_settings.json", "r") as f:
+                settings_data = json.load(f)
+        self.image_settings = settings_data.get("image_settings", {})
+
+        
 
 
     #updating live feed in different Thread
@@ -76,6 +85,7 @@ class Ui_MainWindow(QWidget):
     def captureButtonClicked(self):
         self.frame = self.captureCurrentFrame()
         self.paused = True
+        self.VideoCapture.ThreadActive = False
         self.capturing = True
         self.capture = CaptureUI()
         self.capture.length_clicked.connect(self.onLengthClicked)
@@ -88,10 +98,40 @@ class Ui_MainWindow(QWidget):
         return pixmap.toImage()
 
     def saving(self):
-        self.saveFrame(self.frame)
+        try:
+            image = Image.fromqimage(self.frame)
+            sized = image.resize((2560, 1440), Image.LANCZOS)
+            sharpened = self.adjust_sharpness(sized, (self.imageSharpnes() / 100))
+            saturated = self.adjust_saturation(sharpened, (self.imageSaturation() / 100))
+            self.saveFrame(saturated)
+        except Exception as e:
+            print("Error occurred during image processing and saving:", e)
 
+    def imageQuality(self):
+        quality = self.image_settings.get("image_quality")
+        if quality == "Low":
+            return 10 
+        elif quality  == "Medium":
+            return 42 
+        else:
+            return 95
+
+    def adjust_sharpness(self,image, factor):
+        sharpener = ImageEnhance.Sharpness(image)
+        return sharpener.enhance(1 + factor)
+
+    def adjust_saturation(self,image, factor):
+        saturater = ImageEnhance.Color(image)
+        return saturater.enhance(1 + factor)
+
+    def imageSharpnes(self):
+        return self.image_settings.get("image_sharpness")
+
+    def imageSaturation(self):
+        return self.image_settings.get("image_saturation")
 
     def saveFrame(self, frame):
+        self.VideoCapture.start()
         particle_name = self.capture.particle_name_edit.text()
         length = self.capture.length_edit.text()
         width= self.capture.width_edit.text()
@@ -104,14 +144,17 @@ class Ui_MainWindow(QWidget):
         save_folder = self.file_name  #path to folder
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
-
         save_path = os.path.join(save_folder, frame_filename)
-        self.frame.save(save_path)
+        frame.save(save_path, quality= self.imageQuality())
         insert_data(self.file_name, save_path,particle_name, length, width, color, shape, magnification, note)
         self.capture.close()
         self.capturing = False
         self.paused = False
-
+        main_widget = QWidget()
+        layout = QVBoxLayout(main_widget)
+        msg_box = SelfDestructingMessageBox("Save", "\nSaving image and moving platform..", 7 , main_widget)
+        msg_box.exec_()
+        
     def onLengthClicked(self):
         self.lengthClicked = 1
         self.measureLength()
@@ -134,6 +177,7 @@ class Ui_MainWindow(QWidget):
             QApplication.setOverrideCursor(QCursor(Qt.CrossCursor))
             self.graphicsView.mouseMoveEvent = self.mouseMoveEvent
             self.paused = True
+            self.calibration = self.image_settings.get("calibration")
 
        else:
             self.stopMeasureLength()
@@ -149,10 +193,10 @@ class Ui_MainWindow(QWidget):
         self.lengthLabel.setVisible(False)
         if self.capturing :
             if self.lengthClicked == 1:
-                self.capture.length_edit.setText(str(self.distance * 0.0084))
+                self.capture.length_edit.setText(str(self.distance * self.calibration))
                 self.lengthClicked = 0
             elif self.widthClicked == 1:
-                self.capture.width_edit.setText(str(self.distance * 0.0084))
+                self.capture.width_edit.setText(str(self.distance * self.calibration))
                 self.widthClicked = 0
             self.capture.show()
         self.distance = 0 
@@ -206,7 +250,7 @@ class Ui_MainWindow(QWidget):
         distance.append(distanceLoc)
         for i in range(len(distance)):
             self.distance = self.distance + distance[i]
-        distanceShow = self.distance*0.0084
+        distanceShow = self.distance*self.calibration
         formatted_distance = "{:.2f}".format(distanceShow)
         self.lengthLabel.setText(str(formatted_distance))
         painter.end()
@@ -230,6 +274,7 @@ class Ui_MainWindow(QWidget):
 
     def goToSettings(self):
         self.settings = SettingsUI()
+        self.settings.apply_clicked.connect(self.set)
         self.settings.show()
         
     def goToCurrentImages(self):
@@ -275,6 +320,13 @@ class Ui_MainWindow(QWidget):
         self.videoCapture.wait()
         event.accept()
 
+    def set(self):
+        if self.settings.grid_overlay_checkbox.isChecked():
+            self.grid_overlay.setVisible(True)
+        else:
+            self.grid_overlay.setVisible(False)
+
+
     def on_new_action(self):
         new_file_widget = NewFileUI()
         if new_file_widget.exec_() == QtWidgets.QDialog.Accepted:
@@ -304,14 +356,13 @@ class Ui_MainWindow(QWidget):
         
 
 
-
-
     #defining pyQt5 widgets
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
         MainWindow.showMaximized()
         MainWindow.setStyleSheet("background-color: rgb(255, 255, 255);")
         MainWindow.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
+
         #instantiation of items
         self.centralwidget      =   QtWidgets.QWidget(MainWindow)
         self.progressBar        =   QtWidgets.QProgressBar(self.centralwidget)
@@ -347,7 +398,6 @@ class Ui_MainWindow(QWidget):
         self.currentStatus      =   QtWidgets.QLabel(self.centralwidget)
         self.boxWidget          =   QtWidgets.QLabel(self.centralwidget)
         self.xWidget            =   QtWidgets.QLabel(self.centralwidget)
-        #self.yWidget            =   QtWidgets.QLabel(self.centralwidget)
         self.zWidget            =   QtWidgets.QLabel(self.centralwidget)
         self.xLabel             =   QtWidgets.QLabel(self.centralwidget)
         self.xValue             =   QtWidgets.QLabel(self.centralwidget)
@@ -355,6 +405,12 @@ class Ui_MainWindow(QWidget):
         self.yValue             =   QtWidgets.QLabel(self.centralwidget)
         self.applTitle          =   QtWidgets.QLabel(self.centralwidget)
         self.dropDown           =   QtWidgets.QComboBox(self.centralwidget)
+        self.grid_overlay       =   GridOverlay(self.centralwidget)
+        
+        if self.image_settings.get("grid_overlay"):
+            self.grid_overlay.setVisible(True)
+        else:
+            self.grid_overlay.setVisible(False)
 
         self.dropDown.addItems(self.comports)
         self.dropDown.setFocusPolicy(Qt.NoFocus)
@@ -366,7 +422,7 @@ class Ui_MainWindow(QWidget):
         self.graphicsView.setStyleSheet("background-color: rgb(0, 0, 0);")
         self.graphicsView.setObjectName("graphicsView")
         self.currentStatus.setObjectName("currentStatus")
-        self.placeValue.setObjectName("placeValue")
+        self.placeValue.setObjectName("placeValue" )
         self.locationLabel.setStyleSheet("color:#fbbf16;")
         self.locationLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.locationLabel.setObjectName("locationLabel")
@@ -566,6 +622,7 @@ class Ui_MainWindow(QWidget):
         self.progressLabel   .setGeometry(QtCore.QRect(290, 880, 80, 30))
         self.progressBar     .setGeometry(QtCore.QRect(380, 890, 1200, 20))
         self.graphicsView    .setGeometry(QtCore.QRect(290, 70, 1280, 800))
+        self.grid_overlay    .setGeometry(QtCore.QRect(00, 70,1780, 800))
         #======================LOC. COORDINATES=========================#
         self.placeValue      .setGeometry(QtCore.QRect(1595, 60, 320, 50))
         self.locationLabel   .setGeometry(QtCore.QRect(1595, 110, 130, 30))
@@ -621,6 +678,8 @@ class Ui_MainWindow(QWidget):
         self.settingsButton  .setGeometry(QtCore.QRect(0, 440, 261, 41))
         self.connectGRBL     .setGeometry(QtCore.QRect(1773, 795, 100,30))
         #====================menuBar============================#
+
+
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 1253, 21))
@@ -751,35 +810,33 @@ class Ui_MainWindow(QWidget):
         self.imagesButton.setEnabled(False)
         self.detectButton.setEnabled(False)
         self.statisticsButton.setEnabled(False)
-        
+
 
 class VideoCapture(QThread):
     ImageUpdate = pyqtSignal(QImage)
     def run(self):
         self.ThreadActive = True
-        Capture = cv2.VideoCapture(0) #this is default camera
-        #Capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Set the width to 1280 pixels
-        #Capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  # Set the height to 720 pixels
-        #Capture.set(cv2.CAP_PROP_FPS, 30)
+        self.capture = cv2.VideoCapture(0) #this is default camera
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
+        self.capture.set(cv2.CAP_PROP_FPS, 5)
+        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         while self.ThreadActive:
-            ret, frame = Capture.read()
+            ret, frame = self.capture.read()
             if ret:
                 FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                #FlippedImage = cv2.flip(Image, 0)
-                #FlippedImage = cv2.flip(FlippedImage, 1)
                 ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
                 #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD )
-                ImageScaled = ConvertToQtFormat.scaled(1280,720, Qt.KeepAspectRatio)
-                self.ImageUpdate.emit(ImageScaled)
+                self.ImageUpdate.emit(ConvertToQtFormat)
+
     def stop(self):
         self.ThreadActive = False
         self.quit()
 
 
 if __name__ == "__main__":
-    import sys
     app = QtWidgets.QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(False)
+    #app.setQuitOnLastWindowClosed(False)
     MainWindow = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)

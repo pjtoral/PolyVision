@@ -1,40 +1,22 @@
 {
-  "app_name": "PolyVision",
-  "version": "1.0.0",
-  "year_created": "2023",
-
-  "image_settings":
-    {
-    "image_quality": "high",
-    "default_image_format": "jpeg",
-    "image_resolution": "1920x1080",
-    "image_orientation": "auto",
-    "grid_overlay": false,
-    "timestamp_overlay": false,
-    "location_overlay": false,
-    "auto_save": false //optional
+    "app_name": "PolyVision",
+    "version": "1.0.0",
+    "year_created": "2023",
+    "image_settings": {
+        "image_quality": "Medium",
+        "image_sharpness": 1,
+        "image_saturation": 0,
+        "grid_overlay": false,
+        "calibration": 0.0084
     },
-  "grbl_settings":
-    {
-    "steps_per_mm": 0,
-    "max_feedrate": 0,
-    "acceleration": 0,
-    "homing_cycle": true,
-    "auto_bed_leveling": false,
-    "microstepping": "1/16",
-    "scan_area_dimensions": "200x200x200",
-    "invert_axis_direction": false,
-    "auto_detection": true
+    "grbl_settings": {
+        "petridish": 100,
+        "steps_per_mm": 10,
+        "max_feedrate": 10,
+        "area_scan": true
     },
-  "general_features":
-    {
-    "language": "en",
-    "theme": "usc",
-    "notifications": false,
-    "sound": true,
-    "font_size": "normal",
-    "time_and_date_format": "24-hour", //what other options
-    "auto_scan": true,
-    "location_services": true,
+    "general_features": {
+        "theme": "USC",
+        "sound": true
     }
 }

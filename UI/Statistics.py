@@ -123,7 +123,8 @@ class BoxPlotWidget(QWidget):
 class StatisticsUI(QDialog):
     def __init__(self, file_path, parent=None):
         super().__init__(parent)
-        self.file_path = file_path
+        #self.file_path = file_path
+        self.file_paht = "micropl"
         self.setWindowTitle("Statistics")
         self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
         layout = QHBoxLayout()
@@ -304,12 +305,11 @@ class StatisticsUI(QDialog):
         self.update_pie_chart_data(sizes)
 
     def export(self):
+
         if self.file_path:
             options = QFileDialog.Options()
             options |= QFileDialog.DontUseNativeDialog
             export_path, file_type = QFileDialog.getSaveFileName(self, "Export to CSV or Excel", "", "CSV Files (*.csv);;Excel Files (*.xlsx)", options=options)
-            print(file_type)
-            print(export_path)
             if export_path:
                 data = get_data(self.file_path)
 
@@ -340,7 +340,6 @@ class StatisticsUI(QDialog):
                 width = width_item.text()
                 color = color_item.text()
                 shape = shape_item.text()
-                print(particle_name, length, width, color, shape)
                 update_table_data(self.file_path, particle_name, length, width, color, shape, row+1)
             else:
                 pass

@@ -10,15 +10,17 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, QIn
 from PyQt5 import QtCore
 from PyQt5.QtCore import *
 from PyQt5.uic import loadUi
+import json
 
 
 class SettingsUI(QDialog):
+    calibration_clicked = pyqtSignal()
+    apply_clicked = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
         self.setMaximumSize(800, 500)
         self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
-
         # Set the background color for the window
         palette = self.palette()
         palette.setColor(QPalette.Background, QColor("#FFFFFF"))
@@ -37,12 +39,12 @@ class SettingsUI(QDialog):
 
         resolution_group = QGroupBox("")
         resolution_layout = QHBoxLayout()
-        resolution_label = QLabel ("Resolution: ")
+        resolution_label = QLabel ("Image Quality: ")
         resolution_layout.addWidget(resolution_label)
-        resolution_dropbox = QComboBox()
+        self.resolution_dropbox = QComboBox()
         resolution_options = ["Low", "Medium", "High"]
-        resolution_dropbox.addItems(resolution_options)
-        resolution_layout.addWidget(resolution_dropbox)
+        self.resolution_dropbox.addItems(resolution_options)
+        resolution_layout.addWidget(self.resolution_dropbox)
         resolution_group.setLayout(resolution_layout)
         image_acquisition_layout.addWidget(resolution_group)
 
@@ -50,11 +52,10 @@ class SettingsUI(QDialog):
         sharpness_balance_group = QGroupBox("")
         sharpness_balance_layout = QHBoxLayout()
         sharpness_balance_label = QLabel ("Sharpness: ")
-        sharpness_balance_slider= QSlider(Qt.Horizontal)
-        sharpness_balance_slider.setRange(1, 100)
-        sharpness_balance_slider.setValue(0)
+        self.sharpness_balance_slider= QSlider(Qt.Horizontal)
+        self.sharpness_balance_slider.setRange(1, 99)
         sharpness_balance_layout.addWidget(sharpness_balance_label)
-        sharpness_balance_layout.addWidget(sharpness_balance_slider)
+        sharpness_balance_layout.addWidget(self.sharpness_balance_slider)
         sharpness_balance_group.setLayout(sharpness_balance_layout)
         image_acquisition_layout.addWidget(sharpness_balance_group)
 
@@ -62,11 +63,10 @@ class SettingsUI(QDialog):
         saturation_balance_group = QGroupBox("")
         saturation_balance_layout = QHBoxLayout()
         saturation_balance_label = QLabel ("Saturation: ")
-        saturation_balance_slider= QSlider(Qt.Horizontal)
-        saturation_balance_slider.setRange(-100, 100)
-        saturation_balance_slider.setValue(0)
+        self.saturation_balance_slider= QSlider(Qt.Horizontal)
+        self.saturation_balance_slider.setRange(-99, 99)
         saturation_balance_layout.addWidget(saturation_balance_label)
-        saturation_balance_layout.addWidget(saturation_balance_slider)
+        saturation_balance_layout.addWidget(self.saturation_balance_slider)
         saturation_balance_group.setLayout(saturation_balance_layout)
         image_acquisition_layout.addWidget(saturation_balance_group)
 
@@ -75,9 +75,9 @@ class SettingsUI(QDialog):
         grid_overlay_group = QGroupBox("")
         grid_overlay_layout = QHBoxLayout()
         grid_overlay_label = QLabel("Grid Overlay:")
-        grid_overlay_checkbox = QPushButton()
-        grid_overlay_checkbox.setCheckable(True)
-        grid_overlay_checkbox.setStyleSheet(
+        self.grid_overlay_checkbox = QPushButton()
+        self.grid_overlay_checkbox.setCheckable(True)
+        self.grid_overlay_checkbox.setStyleSheet(
             """
             QPushButton {
                 background-color: #e6e6e6;
@@ -96,9 +96,9 @@ class SettingsUI(QDialog):
             }
             """
         )
-        grid_overlay_checkbox.setFixedSize(100, 20)
+        self.grid_overlay_checkbox.setFixedSize(100, 20)
         grid_overlay_layout.addWidget(grid_overlay_label)
-        grid_overlay_layout.addWidget(grid_overlay_checkbox, alignment= Qt.AlignRight)
+        grid_overlay_layout.addWidget(self.grid_overlay_checkbox, alignment= Qt.AlignRight)
         grid_overlay_group.setLayout(grid_overlay_layout)
 
 
@@ -123,6 +123,7 @@ class SettingsUI(QDialog):
         calibration_label = QLabel ("Measurement Calibration: ")
         calibration_layout.addWidget(calibration_label)
         calibration_button = QPushButton("Calibrate")
+        calibration_button.clicked.connect(self.calibration)
         calibration_button.setFixedSize(300,28)
         calibration_layout.addWidget(calibration_button)
         calibration_group.setLayout(calibration_layout)
@@ -137,18 +138,13 @@ class SettingsUI(QDialog):
         grbl_controller_group = QGroupBox("GRBL Controller Settings")
         grbl_controller_layout = QVBoxLayout()
 
-
-
-     
-
-
         scan_area_group = QGroupBox("")
         scan_area_layout = QHBoxLayout()
         scan_area_label = QLabel ("Petridish size (mm): ")
         scan_area_layout.addWidget(scan_area_label)
-        scan_area_line_edit = QLineEdit()
-        scan_area_line_edit.setPlaceholderText("diameter in mm")
-        scan_area_layout.addWidget(scan_area_line_edit)
+        self.scan_area_line_edit = QLineEdit()
+        self.scan_area_line_edit.setPlaceholderText("diameter in mm")
+        scan_area_layout.addWidget(self.scan_area_line_edit)
         scan_area_group.setLayout(scan_area_layout)
 
         grbl_controller_layout.addWidget(scan_area_group)
@@ -163,23 +159,23 @@ class SettingsUI(QDialog):
 
         steps_label = QLabel ("Steps/mm: ")
         steps_layout.addWidget(steps_label)
-        steps_line_edit = QLineEdit()
-        steps_line_edit.setPlaceholderText("s/mm")
-        steps_layout.addWidget(steps_line_edit)
+        self.steps_line_edit = QLineEdit()
+        self.steps_line_edit.setPlaceholderText("s/mm")
+        steps_layout.addWidget(self.steps_line_edit)
         feedrate_label = QLabel ("Feedrate: ")
         feedrate_layout.addWidget(feedrate_label)
-        feed_line_edit = QLineEdit()
-        feed_line_edit.setPlaceholderText("rate")
-        feedrate_layout.addWidget(feed_line_edit)
+        self.feed_line_edit = QLineEdit()
+        self.feed_line_edit.setPlaceholderText("rate")
+        feedrate_layout.addWidget(self.feed_line_edit)
         steps_group.setLayout(steps_layout)
         feedrate_group.setLayout(feedrate_layout)
 
         scan_overlay_group = QGroupBox("")
         scan_overlay_layout = QHBoxLayout()
         scan_overlay_label = QLabel("Whole Area Scan:")
-        scan_overlay_checkbox = QPushButton()
-        scan_overlay_checkbox.setCheckable(True)
-        scan_overlay_checkbox.setStyleSheet(
+        self.scan_overlay_checkbox = QPushButton()
+        self.scan_overlay_checkbox.setCheckable(True)
+        self.scan_overlay_checkbox.setStyleSheet(
             """
             QPushButton {
                 background-color: #e6e6e6;
@@ -198,9 +194,9 @@ class SettingsUI(QDialog):
             }
             """
         )
-        scan_overlay_checkbox.setFixedSize(40, 20)
+        self.scan_overlay_checkbox.setFixedSize(40, 20)
         scan_overlay_layout.addWidget(scan_overlay_label)
-        scan_overlay_layout.addWidget(scan_overlay_checkbox, alignment= Qt.AlignRight)
+        scan_overlay_layout.addWidget(self.scan_overlay_checkbox, alignment= Qt.AlignRight)
         scan_overlay_group.setLayout(scan_overlay_layout)
 
 
@@ -235,10 +231,10 @@ class SettingsUI(QDialog):
         theme_layout = QVBoxLayout()
         theme_label = QLabel("User Interface Theme: ") #options are, USC, Dark Theme, Ocean
         theme_layout.addWidget(theme_label)
-        theme_dropbox = QComboBox()
+        self.theme_dropbox = QComboBox()
         theme_options = ["USC", "Dark", "Ocean"]
-        theme_dropbox.addItems(theme_options)
-        theme_layout.addWidget(theme_dropbox)
+        self.theme_dropbox.addItems(theme_options)
+        theme_layout.addWidget(self.theme_dropbox)
         theme_group.setLayout(theme_layout)
         general_settings_layout.addWidget(theme_group,alignment=Qt.AlignTop )
 
@@ -264,9 +260,10 @@ class SettingsUI(QDialog):
 
 
         general_settings_layout.addWidget(report_box)
-        sound_checkbox = QCheckBox ("Alarm user of detected microplastic")
-        general_settings_layout.addWidget(sound_checkbox)
+        self.sound_checkbox = QCheckBox ("Alarm user of detected microplastic")
+        general_settings_layout.addWidget(self.sound_checkbox)
         reset_btn = QPushButton("Reset to default")
+        reset_btn.clicked.connect(self.resetToDefault)
         general_settings_layout.addWidget(reset_btn ,alignment=Qt.AlignBottom)
         general_settings_layout.addStretch(1)
 
@@ -294,10 +291,150 @@ class SettingsUI(QDialog):
         mother_layout.addLayout(button_layout)
         mother_layout.addStretch(1)
         self.setLayout(mother_layout)
+        self.readSettings("user_settings.json")
+
+    def redirectYoutube(self):
+        pass
+
+    def redirectDocumentation(self):
+        pass
+    def reportIssue(self):
+        pass
+    def connectGoogle(self):
+        pass
+
+    def resetToDefault(self):
+        self.readSettings("default_settings.json")
+        self.applySettings()
+
+
+    def calibration(self):
+        self.calibration_clicked.emit()
+        self.hide()
+        print("calibration clicked")
 
     def applySettings(self):
-        # Implement the logic to apply the settings here
-        print("Settings applied")
+        file_path = "user_settings.json"  
+
+        settings_data = {} 
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                settings_data = json.load(f)
+
+        # Update the image_settings dictionary with the new image_quality
+        image_settings = settings_data.get("image_settings", {})
+        image_quality = self.resolution_dropbox.itemText(self.resolution_dropbox.currentIndex())
+        if image_quality:
+            image_settings["image_quality"] = image_quality
+
+        image_sharpness = self.sharpness_balance_slider.value()
+        if image_sharpness:
+            image_settings["image_sharpness"] = image_sharpness
+
+        image_saturation = self.saturation_balance_slider.value()
+        if image_saturation:
+            image_settings["image_saturation"] = image_saturation
+
+        grid_overlay = self.grid_overlay_checkbox.isChecked()
+        if grid_overlay is not None:
+            image_settings["grid_overlay"] = grid_overlay
+
+
+        grbl_settings = settings_data.get("grbl_settings", {})
+        petridish = self.scan_area_line_edit.text()
+        if petridish:
+            grbl_settings["petridish"] = int(petridish)
+
+        steps_per_mm = self.steps_line_edit.text()
+        if steps_per_mm:
+            grbl_settings["steps_per_mm"] = int(steps_per_mm)
+
+        max_feedrate= self.feed_line_edit.text()
+        if max_feedrate:
+            grbl_settings["max_feedrate"] = int(max_feedrate)
+
+        area_scan = self.scan_overlay_checkbox.isChecked()
+        if area_scan is not None:
+            grbl_settings["area_scan"] = area_scan
+
+
+
+        # For general settings
+        general_features= settings_data.get("general_features", {})
+        theme = self.theme_dropbox.itemText(self.theme_dropbox.currentIndex())
+        if theme:
+           general_features["theme"] = theme
+
+        sound = self.sound_checkbox.isChecked()
+        if sound is not None:
+            general_features["sound"] = sound
+
+        # Update settings_data dictionary
+        settings_data["image_settings"] = image_settings
+        settings_data["grbl_settings"] = grbl_settings
+        settings_data["general_features"] = general_features
+
+        with open(file_path, "w") as f:
+            json.dump(settings_data, f, indent=4) 
+
+    
+        self.apply_clicked.emit()
+
+    def readSettings(self, file_path):
+
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                settings_data = json.load(f)
+
+                # Image Settings
+                image_settings = settings_data.get("image_settings", {})
+                image_quality = image_settings.get("image_quality")
+                if image_quality:
+                    index = self.resolution_dropbox.findText(image_quality)
+                    if index != -1:
+                        self.resolution_dropbox.setCurrentIndex(index)
+
+                image_sharpness = image_settings.get("image_sharpness")
+                if image_sharpness is not None:
+                    self.sharpness_balance_slider.setValue(image_sharpness)
+
+                image_saturation = image_settings.get("image_saturation")
+                if image_saturation is not None:
+                    self.saturation_balance_slider.setValue(image_saturation)
+
+                grid_overlay = image_settings.get("grid_overlay")
+                if grid_overlay is not None:
+                    self.grid_overlay_checkbox.setChecked(grid_overlay)
+
+                # GRBL settings
+                grbl_settings = settings_data.get("grbl_settings", {})
+                petridish = grbl_settings.get("petridish")
+                if petridish is not None:
+                    self.scan_area_line_edit.setText(str(petridish))
+                steps_per_mm = grbl_settings.get("steps_per_mm")
+                if steps_per_mm is not None:
+                    self.steps_line_edit.setText(str(steps_per_mm))
+
+                max_feedrate = grbl_settings.get("max_feedrate")
+                if max_feedrate is not None:
+                    self.feed_line_edit.setText(str(max_feedrate))
+
+                area_scan = grbl_settings.get("area_scan")
+                if area_scan is not None:
+                    self.scan_overlay_checkbox.setChecked(area_scan)
+
+                # Read general features
+                general_features = settings_data.get("general_features", {})
+                #theme
+                theme = general_features.get("theme")
+                if theme:
+                    index = self.theme_dropbox.findText(theme)
+                    if index != -1:
+                        self.theme_dropbox.setCurrentIndex(index)
+                #sound
+                sound = general_features.get("sound", True)
+                self.sound_checkbox.setChecked(sound)
 
 def main():
     app = QApplication(sys.argv)

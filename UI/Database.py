@@ -57,12 +57,10 @@ def create_microplastics_database(database_name):
 # Function to insert data into the microplastics table
 def insert_data(database_name, image_loc, particle_name, length, width, color, shape, magnification, note):
     microplastics_db_path = os.path.join(database_name, 'microplastic.db')
-    print(microplastics_db_path)
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("INSERT INTO microplastics VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
               (image_loc, particle_name, length, width, color, shape, magnification, note))
-    print("Data added")
     connection.commit()
     connection.close()
 
@@ -89,20 +87,15 @@ def get_image_data(database_name, particle_name):
     c.execute("SELECT * FROM microplastics WHERE particle_name = ?", (particle_name,))
     image_data = c.fetchall()
     connection.close()
-
-    for row in image_data:
-        print("Particle Name:", row[1])
-        print("Length:", row[2])
-        print("Width:", row[3])
-        print("Color:", row[4])
-        print("Shape:", row[5])
-        print("Magnification:", row[6])
-        print("Note:", row[7])
-        print("--------------------")
     return image_data
 
 def update_all_data(database_name, particle_name, length, width, color, shape, magnification, note):
-    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+
+    if ".db" not in database_name:
+        microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    else:
+        microplastics_db_path = database_name
+
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("UPDATE microplastics SET length=?, width=?, color=?, shape=?, magnification=?, note=? WHERE particle_name=?",
@@ -111,7 +104,12 @@ def update_all_data(database_name, particle_name, length, width, color, shape, m
     connection.close()
 
 def update_table_data(database_name, particle_name, length, width, color, shape, row_id):
-    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+
+    if ".db" not in database_name:
+        microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    else:
+        microplastics_db_path = database_name
+
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("UPDATE microplastics SET particle_name=?, length=?, width=?, color=?, shape=? WHERE ROWID=?",
@@ -120,7 +118,12 @@ def update_table_data(database_name, particle_name, length, width, color, shape,
     connection.close()
 
 def clear_table_data(database_name):
-    microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    
+    if ".db" not in database_name:
+        microplastics_db_path = os.path.join(database_name, 'microplastic.db')
+    else:
+        microplastics_db_path = database_name
+
     connection = sqlite3.connect(microplastics_db_path)
     c = connection.cursor()
     c.execute("UPDATE microplastics SET 'particle_name' = '', 'length' = '', 'width' = '', 'color' = '', 'shape' = ''")

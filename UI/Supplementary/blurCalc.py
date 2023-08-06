@@ -2,12 +2,8 @@ import cv2
 import numpy as np
 
 def calculate_blur(image):
-    # Convert the image to grayscale
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Calculate the Laplacian variance for the region (blur metric)
     lap_var = cv2.Laplacian(gray_image, cv2.CV_64F).var()
-
     return lap_var
 
 def main():
