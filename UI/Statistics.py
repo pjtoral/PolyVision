@@ -1,8 +1,8 @@
 import sys
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5 import QtGui, QtWidgets, QtCore
-from PyQt5.QtGui import QIcon, QPainter, QColor, QFont
+from PyQt5.QtGui import QIcon, QPainter, QColor, QFont, QPixmap, QBrush
 import csv
 import pandas as pd
 from openpyxl import Workbook
@@ -12,175 +12,44 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import sqlite3
 from Database import *
-
-class PieChartWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.figure = plt.figure()
-        self.canvas = FigureCanvas(self.figure)
-        self.setLayout(QVBoxLayout())
-        self.layout().addWidget(self.canvas)
-        self.pie_chart = None
-
-    def update_chart(self, labels, sizes):
-        # Check if the sizes list is empty or contains only non-positive values
-        if not sizes or all(size <= 0 for size in sizes):
-            # Handle empty or invalid data scenario (e.g., display a message)
-            print("Invalid data for pie chart")
-            return
-
-        if self.pie_chart:
-            # Remove the previous pie chart
-            self.figure.clear()
-            self.pie_chart = None
-
-        self.ax = self.figure.add_subplot(111)
-        self.ax.axis('off') 
-        text_props = {'fontsize': 10, 'color': 'black'}
-        self.pie_chart = self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, textprops=text_props)
-        self.ax.axis('equal')
-        self.canvas.draw()
-
-class BarChartWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.figure = plt.figure()
-        self.canvas = FigureCanvas(self.figure)
-        self.setLayout(QVBoxLayout())
-        self.layout().addWidget(self.canvas)
-
-    def update_plot(self, data_dict):
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        ax.clear()
-
-        if not data_dict or len(data_dict) == 0:
-            return
-
-        categories = list(data_dict.keys())
-        counts = list(data_dict.values())
-        max_value = max(counts)
-        if max_value == 0:
-            return
-
-        chart_width = len(data_dict)  # Adjusting the width for better spacing between bars
-        chart_height = max_value
-        bar_width = 0.8
-        bar_height_scale = chart_height / max_value
-
-        # Draw the bars
-        for i, category in enumerate(categories):
-            x = i
-            y = 0
-            bar_height = data_dict[category] * bar_height_scale
-
-            ax.bar(x, bar_height, width=bar_width, bottom=y, color='green')
-
-        # Set X and Y-axis limits
-        ax.set_xlim(-0.5, chart_width - 0.5)
-        ax.set_ylim(0, chart_height)
-
-        # Draw X-axis and Y-axis
-        ax.axhline(y=0, color='k')
-        ax.axvline(x=-0.5, color='k')
-
-        # Set X-axis and Y-axis labels
-        ax.set_xticks([i for i in range(len(data_dict))])
-        ax.set_xticklabels(categories)
-        ax.set_xlabel("Categories")
-        ax.set_ylabel("Values")
-
-        self.canvas.draw()
-
-class BoxPlotWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.canvas)
-        self.setLayout(self.layout)
-
-    def update_plot(self, data):
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-
-        # Rotate the plot to be horizontal
-        box_plot = ax.boxplot(data, vert=False, widths=0.25, patch_artist=True)
-
-        
-        for box in box_plot['boxes']:
-            box.set(facecolor='green')
-        for whisker in box_plot['whiskers']:
-            whisker.set(color='black', linewidth=1.5) 
-        for median in box_plot['medians']:
-            median.set(color='red', linewidth=2)  
-
-        ax.set_xlabel("Measurement")
-        self.canvas.draw()
-
+import numpy as np
+from Charts import *
 
 class StatisticsUI(QDialog):
+    close_signal = pyqtSignal()
+
     def __init__(self, file_path, parent=None):
         super().__init__(parent)
-        #self.file_path = file_path
-        self.file_paht = "micropl"
+        self.file_path = file_path
+        #self.file_path = "microplastic.db"
         self.setWindowTitle("Statistics")
         self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         layout = QHBoxLayout()
         self.tabs = QTabWidget()
 
 
-        shape_content_widget = QWidget()
-        shape_content_widget.setStyleSheet("background-color: #FFFFFF;")
-        self.shape_layout = QVBoxLayout(shape_content_widget)
-        shape_label = QLabel("Shape Statistics")
-        shape_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
-        self.shape_layout.addWidget(shape_label, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+        self.shape_content_widget = QWidget()
+        self.shape_content_widget.setStyleSheet("background-color: #FFFFFF;")
+        self.shape_layout = QVBoxLayout(self.shape_content_widget)
         self.shape_layout.setSpacing(1)
-        self.pie_chart_widget = PieChartWidget(self)
-        self.shape_layout.addWidget(self.pie_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
         self.shape_layout.addStretch()
-
-
-        color_content_widget = QWidget()
-        color_content_widget.setStyleSheet("background-color: #FFFFFF;")
-        self.color_layout = QVBoxLayout(color_content_widget)
-        color_label = QLabel("Color Statistics")
-        color_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
-        self.color_layout.addWidget(color_label, alignment=Qt.AlignHCenter | Qt.AlignTop)
+        self.color_content_widget = QWidget()
+        self.color_content_widget.setStyleSheet("background-color: #FFFFFF;")
+        self.color_layout = QVBoxLayout(self.color_content_widget)
         self.color_layout.setSpacing(1)
-        self.bar_chart_widget = BarChartWidget(self)
-        self.color_layout.addWidget(self.bar_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
         self.color_layout.addStretch()
-
-
-        length_content_widget = QWidget()
-        length_content_widget.setStyleSheet("background-color: #FFFFFF;")
-        self.length_layout = QVBoxLayout(length_content_widget)
-        length_label = QLabel("Length Statistics")
-        length_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
-        self.length_layout.addWidget(length_label, alignment=Qt.AlignHCenter | Qt.AlignTop)
+        self.length_content_widget = QWidget()
+        self.length_content_widget.setStyleSheet("background-color: #FFFFFF;")
+        self.length_layout = QVBoxLayout(self.length_content_widget)
         self.length_layout.setSpacing(1)
-        self.box_plot_widget_length = BoxPlotWidget(self)
-        self.length_layout.addWidget(self.box_plot_widget_length, alignment=Qt.AlignHCenter | Qt.AlignTop)
         self.length_layout.addStretch()
-
-        width_content_widget = QWidget()
-        width_content_widget.setStyleSheet("background-color: #FFFFFF;")
-        self.width_layout = QVBoxLayout(width_content_widget)
-        width_label = QLabel("Width Statistics")
-        width_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
-        self.width_layout.addWidget(width_label, alignment=Qt.AlignHCenter | Qt.AlignTop)
+        self.width_content_widget = QWidget()
+        self.width_content_widget.setStyleSheet("background-color: #FFFFFF;")
+        self.width_layout = QVBoxLayout(self.width_content_widget)
         self.width_layout.setSpacing(1)
-        self.box_plot_widget_width = BoxPlotWidget(self)
-        self.width_layout.addWidget(self.box_plot_widget_width, alignment=Qt.AlignHCenter | Qt.AlignTop)
         self.width_layout.addStretch()
-
-        self.tabs.addTab(shape_content_widget,"Shape")   # Add to Shape Tab
-        self.tabs.addTab(color_content_widget, "Color")   # Add to Color Tab
-        self.tabs.addTab(length_content_widget, "Length")  # Add to Length Tab
-        self.tabs.addTab(width_content_widget, "Width")
 
 
         layout.addWidget(self.tabs)
@@ -190,40 +59,91 @@ class StatisticsUI(QDialog):
         self.table_widget = QTableWidget()
         self.table_widget.setRowCount(20)
         self.table_widget.setColumnCount(5)
-        self.table_widget.setColumnWidth(7,348)
-        self.table_widget.setHorizontalHeaderLabels(["Particle Name","Length","Width", "Color", "Shape"])
+        self.table_widget.setColumnWidth(4,116)
 
 
-        left_button_layout = QVBoxLayout()
-        left_button_layout.setSpacing(1)
-        export_button = QPushButton("Export")
-        database_button = QPushButton("Database")
-        left_button_layout.addWidget(database_button)
-        left_button_layout.addWidget(export_button)
-        #left_button_layout.addStretch(10)
+        self.shape_radio = QRadioButton("Shape")
+        self.color_radio = QRadioButton("Color")
+        self.length_radio = QRadioButton("Length")
+        self.width_radio = QRadioButton("Width")
 
+        type_box = QGroupBox("Label")
+        filters = QVBoxLayout()
+        filters.addWidget(self.shape_radio)
+        filters.addWidget(self.color_radio)
+        filters.addWidget(self.length_radio)
+        filters.addWidget(self.width_radio)
+        type_box.setLayout(filters)
+
+        self.pie_radio = QRadioButton("Pie Chart")
+        self.histo_radio = QRadioButton("Histogram")
+        self.box_radio = QRadioButton("Box Plot")
+        self.bar_radio = QRadioButton("Bar Graph")
+
+        chart_box = QGroupBox("Chart")
+        filters = QVBoxLayout()
+        filters.addWidget(self.pie_radio)
+        filters.addWidget(self.histo_radio)
+        filters.addWidget(self.box_radio)
+        filters.addWidget(self.bar_radio)
+        chart_box.setLayout(filters)
+
+        self.label_button_group = QButtonGroup()
+        self.label_button_group.addButton(self.shape_radio)
+        self.label_button_group.addButton(self.color_radio)
+        self.label_button_group.addButton(self.length_radio)
+        self.label_button_group.addButton(self.width_radio)
+
+        self.chart_button_group = QButtonGroup()
+        self.chart_button_group.addButton(self.pie_radio)
+        self.chart_button_group.addButton(self.histo_radio)
+        self.chart_button_group.addButton(self.box_radio)
+        self.chart_button_group.addButton(self.bar_radio)
 
         right_button_layout = QVBoxLayout()
         right_button_layout.setSpacing(1)
+        generate_button = QPushButton("Generate")
+        clear_button = QPushButton("Clear Tabs")
         update_button = QPushButton("Update")
-        close_button = QPushButton("Close")
+        self.close_button = QPushButton("Close")
+        export_button = QPushButton("Export Data")
+        chart_button = QPushButton("Export Chart")
+        database_button = QPushButton("Database")
+
+        right_button_layout.addWidget(type_box)
+        right_button_layout.addWidget(chart_box)
+        spacer_item = QSpacerItem(10, 70, QSizePolicy.Minimum, QSizePolicy.Fixed)
+        right_button_layout.addItem(spacer_item)
+        right_button_layout.addWidget(generate_button)
+        right_button_layout.addWidget(clear_button)
         right_button_layout.addWidget(database_button)
         right_button_layout.addWidget(export_button)
+        right_button_layout.addWidget(chart_button)
         right_button_layout.addWidget(update_button)
-        right_button_layout.addWidget(close_button)
-        #right_button_layout.addStretch(10)
+        right_button_layout.addWidget(self.close_button)
+
+        generate_button.clicked.connect(self.initializeStats)
+        clear_button.clicked.connect(self.hide_all_tabs)
         database_button.clicked.connect(self.change_database)
         export_button.clicked.connect(self.export)
+        chart_button.clicked.connect(self.export_stats)
         update_button.clicked.connect(self.update)
-        close_button.clicked.connect(self.close)
-        database_button.setMinimumSize(100, 40)
-        export_button.setMinimumSize(100, 40)
-        update_button.setMinimumSize(100, 40)
-        close_button.setMinimumSize(100, 40)
-        database_button.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
-        export_button.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
-        update_button.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
-        close_button.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        self.close_button.clicked.connect(self.closeUI)
+        generate_button.setMinimumSize(100, 35)
+        clear_button.setMinimumSize(100, 35)
+        database_button.setMinimumSize(100, 35)
+        export_button.setMinimumSize(100, 35)
+        chart_button.setMinimumSize(100, 35)
+        update_button.setMinimumSize(100, 35)
+        self.close_button.setMinimumSize(100, 35)
+        clear_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        generate_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")   
+        database_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        export_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        chart_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        update_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        self.close_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 13px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+
 
         grid_layout = QGridLayout()
         grid_layout.addWidget(self.table_widget, 0, 0)
@@ -233,9 +153,24 @@ class StatisticsUI(QDialog):
         self.setLayout(layout)
         self.initializeStats()
 
-    def update_pie_chart_data(self, sizes):
-        labels = ['Filaments', 'Fragments', 'Film']
-        self.pie_chart_widget.update_chart(labels, sizes)
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        brush = QBrush(QColor(224, 224, 212, 255))
+        painter.setBrush(brush)
+
+        # Create a rounded rectangle for the dialog's background
+        rect = self.rect()
+        painter.drawRoundedRect(rect, 10, 10)
+
+    def closeUI(self):
+        self.close_signal.emit()
+        self.close()
+
+    def hide_all_tabs(self):
+      for i in range(3, -1, -1):
+        self.tabs.removeTab(i)
 
     def change_database(self):
         options = QFileDialog.Options()
@@ -244,6 +179,7 @@ class StatisticsUI(QDialog):
         if new_db:
             self.file_path= new_db
             self.initializeStats()
+    
 
     def initializeStats(self):
         data = get_data(self.file_path)
@@ -255,11 +191,13 @@ class StatisticsUI(QDialog):
 
         if self.table_widget:
             self.table_widget.clear()
-            self.table_widget.setHorizontalHeaderLabels(["Particle Name","Length","Width", "Color", "Shape"])
+            self.table_widget.setHorizontalHeaderLabels(["Particle Name","Length (mm)","Width (mm)", "Color", "Shape"])
 
-        fragments_count = 0
-        filaments_count = 0
-        films_count = 0
+        sizes_dict = {
+            'filament': 0,
+            'fragment': 0,
+            'film': 0
+        }
         data_length = []
         data_width = []
         color_dict = {}
@@ -281,48 +219,214 @@ class StatisticsUI(QDialog):
                     else:
                         color_dict[color] = 1
                 #for shape
-                if column_index == 5:  
+                if column_index == 5:
                     shape = str(cell_value).lower()
                     if 'fragment' in shape:
-                        fragments_count += 1
+                        sizes_dict['fragment'] += 1
                     elif 'filament' in shape:
-                        filaments_count += 1
+                        sizes_dict['filament'] += 1
                     elif 'film' in shape:
-                        films_count += 1
+                        sizes_dict['film'] += 1
 
                 if column_index in [1, 2, 3, 4, 5]:
                     self.table_widget.setItem(row_index, column_index - 1, QTableWidgetItem(str(cell_value)))
 
         
-        #For Length statistics
-        self.box_plot_widget_length.update_plot(data_length)
-        #For Width statistics
-        self.box_plot_widget_width.update_plot(data_width)
-        #For color statistics
-        self.bar_chart_widget.update_plot(color_dict)
-        #For shape statistics 
-        sizes = [filaments_count, fragments_count, films_count]
-        self.update_pie_chart_data(sizes)
+        if self.label_button_group.checkedButton() is not None and self.chart_button_group.checkedButton() is not None:
+       
+            if self.label_button_group.checkedButton().text() == "Shape": 
+                while self.shape_layout.count():
+                    item = self.shape_layout.takeAt(0)
+                    widget = item.widget()
+                    if widget:
+                        widget.setParent(None)
+                shape_label = QLabel("Shape Statistics")
+                shape_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
+                self.shape_layout.addWidget(shape_label, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+
+                if self.chart_button_group.checkedButton().text() == "Pie Chart":  
+                    self.pie_chart_widget = PieChartWidget(self)
+                    self.shape_layout.addWidget(self.pie_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.shape_content_widget,"Shape")
+                    self.pie_chart_widget.update_chart(sizes_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+                elif self.chart_button_group.checkedButton().text() == "Bar Graph" or self.chart_button_group.checkedButton().text() == "Histogram": 
+                    self.bar_chart_widget = BarChartWidget(self)
+                    self.shape_layout.addWidget(self.bar_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.shape_content_widget,"Shape")
+                    self.bar_chart_widget.update_plot(sizes_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+                elif self.chart_button_group.checkedButton().text() == "Box Plot": 
+                    self.box_plot_widget = BoxPlotWidget(self)
+                    self.shape_layout.addWidget(self.box_plot_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.shape_content_widget,"Shape")
+                    self.box_plot_widget.update_plot_disc(sizes_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+            if self.label_button_group.checkedButton().text() == "Color":
+                while self.color_layout.count():
+                    item = self.color_layout.takeAt(0)
+                    widget = item.widget()
+                    if widget:
+                        widget.setParent(None)
+                color_label = QLabel("Color Statistics")
+                color_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
+                self.color_layout.addWidget(color_label, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+
+                if self.chart_button_group.checkedButton().text() == "Bar Graph" or self.chart_button_group.checkedButton().text() == "Histogram": 
+                    self.bar_chart_widget = BarChartWidget(self)
+                    self.color_layout.addWidget(self.bar_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.color_content_widget, "Color")
+                    self.bar_chart_widget.update_plot(color_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+                elif self.chart_button_group.checkedButton().text() == "Pie Chart":  
+                    self.pie_chart_widget = PieChartWidget(self)
+                    self.color_layout.addWidget(self.pie_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.color_content_widget,"Color")
+                    self.pie_chart_widget.update_chart(color_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+                elif self.chart_button_group.checkedButton().text() == "Box Plot": 
+                    self.box_plot_widget = BoxPlotWidget(self)
+                    self.color_layout.addWidget(self.box_plot_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.color_content_widget,"Color")
+                    self.box_plot_widget.update_plot_disc(color_dict)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+
+            if self.label_button_group.checkedButton().text() == "Length":
+                while self.length_layout.count():
+                    item = self.length_layout.takeAt(0)
+                    widget = item.widget()
+                    if widget:
+                        widget.setParent(None)
+                length_label = QLabel("Length Statistics")
+                length_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
+                self.length_layout.addWidget(length_label, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+
+                if self.chart_button_group.checkedButton().text() == "Box Plot":
+                    self.box_plot_widget = BoxPlotWidget(self)
+                    self.length_layout.addWidget(self.box_plot_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.length_content_widget, "Length")
+                    self.box_plot_widget.update_plot_cont(data_length)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Bar Graph": 
+                    self.bar_chart_widget = BarChartWidget(self)
+                    self.length_layout.addWidget(self.bar_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.length_content_widget, "Length")
+                    self.bar_chart_widget.update_plot_cont(data_length)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Pie Chart":  
+                    self.pie_chart_widget = PieChartWidget(self)
+                    self.length_layout.addWidget(self.pie_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.length_content_widget,"Length")
+                    self.pie_chart_widget.update_chart_cont(data_length)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Histogram":  
+                    self.histogram_widget = HistogramWidget(self)
+                    self.length_layout.addWidget(self.histogram_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.length_content_widget,"Length")
+                    self.histogram_widget.update_histogram(data_length)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+
+
+            if self.label_button_group.checkedButton().text() == "Width":
+
+                while self.width_layout.count():
+                    item = self.width_layout.takeAt(0)
+                    widget = item.widget()
+                    if widget:
+                        widget.setParent(None)
+                width_label = QLabel("Width Statistics")
+                width_label.setStyleSheet("font: bold 25px; color:rgba(0, 133, 63, 255); padding-top: 25px;")
+                self.width_layout.addWidget(width_label, alignment=Qt.AlignHCenter | Qt.AlignBottom)
+
+                if self.chart_button_group.checkedButton().text() == "Box Plot":
+                    self.box_plot_widget = BoxPlotWidget(self)
+                    self.width_layout.addWidget(self.box_plot_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.width_content_widget, "Width")
+                    self.box_plot_widget.update_plot_cont(data_width)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Bar Graph": 
+                    self.bar_chart_widget = BarChartWidget(self)
+                    self.width_layout.addWidget(self.bar_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.width_content_widget, "Width")
+                    self.bar_chart_widget.update_plot_cont(data_width)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Pie Chart":  
+                    self.pie_chart_widget = PieChartWidget(self)
+                    self.width_layout.addWidget(self.pie_chart_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.width_content_widget,"Width")
+                    self.pie_chart_widget.update_chart_cont(data_width)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+                elif self.chart_button_group.checkedButton().text() == "Histogram":  
+                    self.histogram_widget = HistogramWidget(self)
+                    self.width_layout.addWidget(self.histogram_widget, alignment=Qt.AlignHCenter | Qt.AlignTop)
+                    self.tabs.addTab(self.width_content_widget,"Width")
+                    self.histogram_widget.update_histogram(data_width)
+                    self.tabs.setTabVisible(self.tabs.count()+1, True)
+
+
+    def save_widget_as_png(self, widget, filename):
+        pixmap = widget.grab()
+        pixmap.save(filename, "PNG")
+
+    def export_stats(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        export_path, _ = QFileDialog.getSaveFileName(self, "Export Statistics as PNG", "", "PNG Files (*.png)", options=options)
+
+        if export_path:
+            print(export_path)
+
+            if "exported" not in export_path:
+                exported_folder = os.path.join(os.path.dirname(export_path), "exported")
+                os.makedirs(exported_folder, exist_ok=True)
+                export_path = os.path.join(exported_folder, os.path.basename(export_path) + ".png")
+            else:
+                export_path = export_path + ".png"
+
+            selected_tab_index = self.tabs.currentIndex()
+            selected_widget = self.tabs.widget(selected_tab_index)
+            if selected_widget:
+                self.save_widget_as_png(selected_widget, export_path)
+
 
     def export(self):
-
+        self.file_path = "E:/THESIS/PolyVision/UI/testing"
+        screenshot = self.grab()
+        screenshot.save("widget_screenshot.png", "PNG")  # Save the pixmap as a PNG image
         if self.file_path:
             options = QFileDialog.Options()
             options |= QFileDialog.DontUseNativeDialog
-            export_path, file_type = QFileDialog.getSaveFileName(self, "Export to CSV or Excel", "", "CSV Files (*.csv);;Excel Files (*.xlsx)", options=options)
+            export_path, file_type = QFileDialog.getSaveFileName(self, "Export to CSV or Excel", "", "CSV Files (*.csv);;Excel Files (*.xlsx)", options=options) 
             if export_path:
                 data = get_data(self.file_path)
 
+                # Create the "exported" subfolder if it doesn't exist
+                exported_folder = os.path.join(os.path.dirname(export_path), "exported")
+                os.makedirs(exported_folder, exist_ok=True)
+                
+                # Include the filename in the export path
                 if file_type == 'CSV Files (*.csv)':
+                    export_path = os.path.join(exported_folder, os.path.basename(export_path) + ".csv")
                     with open(export_path, "w", newline="") as csvfile:
                         writer = csv.writer(csvfile)
                         writer.writerow(["Image Location", "Particle Name", "Length", "Width", "Color", "Shape", "Magnification", "Note"])
                         writer.writerows(data)
+
                 elif file_type == 'Excel Files (*.xlsx)':
                     df = pd.DataFrame(data, columns=["Image Location", "Particle Name", "Length", "Width", "Color", "Shape", "Magnification", "Note"])
-                    export_path = export_path + ".xlsx"
+                    export_path = os.path.join(exported_folder, os.path.basename(export_path) + ".xlsx")
                     with pd.ExcelWriter(export_path, engine='openpyxl') as writer:
                         df.to_excel(writer, index=False, sheet_name='Sheet1')
+
 
     def update(self):
         clear_table_data(self.file_path)
@@ -344,4 +448,14 @@ class StatisticsUI(QDialog):
             else:
                 pass
         self.initializeStats()
+
+
+def main():
+    app = QApplication(sys.argv)
+    stat_ui = StatisticsUI("testing/microplastic.db")
+    stat_ui.show()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
 

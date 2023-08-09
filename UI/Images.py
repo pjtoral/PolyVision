@@ -31,12 +31,15 @@ class ImageLabel(QLabel):
         self.col = column
 
 class ImagesUI(QDialog):
+    close_signal = pyqtSignal()
+
     def __init__(self, file_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Images")
         self.setWindowIcon(QIcon("res/PolyVisionLogo.png"))
         self.setFixedSize(1400, 800)
-
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         main_layout = QHBoxLayout(self)
 
         # Create the left-side widgets
@@ -136,14 +139,26 @@ class ImagesUI(QDialog):
         left_layout.addLayout(particle_details_layout)
         left_layout.addStretch()
 
+        change_dir_button = QPushButton("Change Directory")
+        change_dir_button.setFixedSize(175,30)
+        change_dir_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         open_image_button = QPushButton("Open Image")
+        open_image_button.setFixedSize(175,30)
+        open_image_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        close_button = QPushButton("Close")
+        close_button.setFixedSize(175,30)
+        close_button.setStyleSheet("QPushButton {\n""    background-color: #00853f;\n""    color: #FFFFFF;\n""    font: bold 15px;\n""    border-radius: 5px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.image_pathway = None
         open_image_button.clicked.connect(lambda: self.open_image(self.image_pathway))
+        change_dir_button.clicked.connect(self.change_path)
+        close_button.clicked.connect(self.closeUI)
+        left_layout.addWidget(change_dir_button)
         left_layout.addWidget(open_image_button)
+        left_layout.addWidget(close_button)
 
         self.left_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self.left_widget.setMaximumWidth(int(self.width() * 0.2))  
-        main_layout.addWidget(self.left_widget, stretch=0)
+        
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -162,6 +177,8 @@ class ImagesUI(QDialog):
         self.scroll_widget_layout.addLayout(self.grid_layout)  
         scroll_area.setWidget(self.scroll_widget)
         main_layout.addWidget(scroll_area) 
+        main_layout.addWidget(self.left_widget, stretch=0)
+        
 
         self.filaments_checkbox.stateChanged.connect(self.on_filter_changed)
         self.fragments_checkbox.stateChanged.connect(self.on_filter_changed)
@@ -170,6 +187,21 @@ class ImagesUI(QDialog):
         self.length_max_input.textChanged.connect(self.on_filter_changed)
         self.width_min_input.textChanged.connect(self.on_filter_changed)
         self.width_max_input.textChanged.connect(self.on_filter_changed)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        brush = QBrush(QColor(224, 224, 212, 255))
+        painter.setBrush(brush)
+
+        # Create a rounded rectangle for the dialog's background
+        rect = self.rect()
+        painter.drawRoundedRect(rect, 10, 10)
+
+    def closeUI(self):
+        self.close_signal.emit()
+        self.close()
 
     def open_image(self,image_path):
         QDesktopServices.openUrl(QUrl.fromLocalFile(image_path))
@@ -256,7 +288,6 @@ class ImagesUI(QDialog):
                 pass
 
 
-
         for label in valid_labels:
             self.grid_layout.addWidget(label[0], label[1].row, label[1].col)
               
@@ -307,3 +338,20 @@ class ImagesUI(QDialog):
 
     def on_filter_changed(self):
         self.scrape_folder(self.file_path)
+
+    def change_path(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        new_folder = QFileDialog.getExistingDirectory(self, "Select Folder", self.file_path, options=options)
+        if new_folder:
+            self.file_path = new_folder
+            self.scrape_folder(new_folder)
+
+def main():
+    app = QApplication(sys.argv)
+    stat_ui = ImagesUI("testing")
+    stat_ui.show()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()

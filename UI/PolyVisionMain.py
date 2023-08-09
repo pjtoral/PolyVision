@@ -31,9 +31,6 @@ class Ui_MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        # self.VideoCapture = VideoCapture()
-        # self.VideoCapture.start() #creating a simultaneous thread 
-        # self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
@@ -43,14 +40,11 @@ class Ui_MainWindow(QMainWindow):
         self.points = []
         self.distance = 0
         self.capturing = False
-
         with open("user_settings.json", "r") as f:
                 settings_data = json.load(f)
         self.image_settings = settings_data.get("image_settings", {})
 
-        
-
-
+    
     #updating live feed in different Thread
     def ImageUpdateSlot(self, Image):
         if not self.paused:
@@ -78,8 +72,6 @@ class Ui_MainWindow(QMainWindow):
     #for canceling live feed (To add pa)
     def CancelFeed(self):
         self.ImageCapture.stop()
-
-
 
     #for capturing images
     def captureButtonClicked(self):
@@ -159,11 +151,9 @@ class Ui_MainWindow(QMainWindow):
         self.lengthClicked = 1
         self.measureLength()
 
-
     def onWidthClicked(self):
         self.widthClicked = 1
         self.measureLength()
-
 
     #start-measuring
     def measureLength(self):
@@ -183,7 +173,6 @@ class Ui_MainWindow(QMainWindow):
             self.stopMeasureLength()
             self.graphicsView.setPixmap(QPixmap.fromImage(self.frame))
 
-
     #stop-measuring
     def stopMeasureLength(self):
         self.measuring = False
@@ -200,9 +189,6 @@ class Ui_MainWindow(QMainWindow):
                 self.widthClicked = 0
             self.capture.show()
         self.distance = 0 
-
-        
-        
 
     def mousePressEvent(self, event):
         if self.measuring and (event.button() == Qt.LeftButton):
@@ -257,15 +243,17 @@ class Ui_MainWindow(QMainWindow):
         pixmap = QPixmap.fromImage(qimage)
         self.graphicsView.setPixmap(pixmap)
 
-
     #accessing COM ports
     def serialConnect(self):
-        self.port = self.dropDown.currentText().split(" - ")[0]  # Extract the COM port
+        self.port = self.dropDown.currentText().split(" - ")[0] 
         print("Selected COM port:", self.port)
         try:
             self.ser = serial.Serial(self.port, baudrate=115200)
             time.sleep(2)
             print("Connected to GRBL")
+            self.VideoCapture = VideoCapture()
+            self.VideoCapture.start()
+            self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         except serial.SerialException as e:
             print("Error opening serial port:", e)
 
@@ -281,11 +269,20 @@ class Ui_MainWindow(QMainWindow):
         self.paused = True
         self.images = ImagesUI(self.file_name)
         self.images.exec_()
+        if not self.images:
+            self.setPausedFalse()
 
     def goToStatistics(self):
         self.paused = True
         self.statistics = StatisticsUI(self.file_name)
+        self.statistics.close_signal.connect(self.setPausedFalse)
         self.statistics.exec_()
+        print("im here stats")
+
+    def setPausedFalse(self):
+        print("im here")
+        self.paused = False
+        self.statistics.close()
 
     def moveUp(self):
         if self.ser:
@@ -326,7 +323,6 @@ class Ui_MainWindow(QMainWindow):
         else:
             self.grid_overlay.setVisible(False)
 
-
     def on_new_action(self):
         new_file_widget = NewFileUI()
         if new_file_widget.exec_() == QtWidgets.QDialog.Accepted:
@@ -353,8 +349,6 @@ class Ui_MainWindow(QMainWindow):
             self.detectButton.setEnabled(True)
             self.statisticsButton.setEnabled(True)
             self.measureButton.setEnabled(True)
-        
-
 
     #defining pyQt5 widgets
     def setupUi(self, MainWindow):
