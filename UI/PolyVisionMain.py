@@ -25,18 +25,22 @@ import json
 from PIL import ImageEnhance
 from SelfDestructingMessageBox import *
 from GridOverlay import GridOverlay
+from Detect import DetectUI
 
 
 class Ui_MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+        self.VideoCapture = VideoCapture()
+        self.VideoCapture.start()
+        self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
         self.blurThreshold = 8 
         self.measuring = False
-        self.paused = True
+        self.paused = False
         self.points = []
         self.distance = 0
         self.capturing = False
@@ -251,14 +255,21 @@ class Ui_MainWindow(QMainWindow):
             self.ser = serial.Serial(self.port, baudrate=115200)
             time.sleep(2)
             print("Connected to GRBL")
-            self.VideoCapture = VideoCapture()
-            self.VideoCapture.start()
-            self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
+            # self.VideoCapture = VideoCapture()
+            # self.VideoCapture.start()
+            # self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         except serial.SerialException as e:
             print("Error opening serial port:", e)
-
+            pass
     def mouseReleaseEvent(self, event):
         pass
+
+    def goToDetect(self):
+        self.paused = True
+        self.detect = DetectUI()
+        self.detect.close_signal.connect(self.setPausedFalse)
+        self.detect.exec_()
+        print("im here stats")
 
     def goToSettings(self):
         self.settings = SettingsUI()
@@ -282,32 +293,35 @@ class Ui_MainWindow(QMainWindow):
     def setPausedFalse(self):
         print("im here")
         self.paused = False
-        self.statistics.close()
 
     def moveUp(self):
         if self.ser:
-            self.gcode_command = b"G21 G91 G1 Y10 F1000\r\n"
+            print("right")
+            self.gcode_command = b"G21 G91 G1 Y1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
-            pass
+            print("passed")
 
     def moveDown(self):
         if self.ser: 
-            self.gcode_command = b"G21 G91 G1 Y-10 F1000\r\n"
+            print("right")
+            self.gcode_command = b"G21 G91 G1 Y-1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
             pass
 
     def moveLeft(self):
         if self.ser:
-            self.gcode_command = b"G21 G91 G1 X10 F1000\r\n"
+            print("right")
+            self.gcode_command = b"G21 G91 G1 X-1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
             pass
 
     def moveRight(self):
         if self.ser:
-            self.gcode_command = b"G21 G91 G1 X-10 F1000\r\n"
+            print("right")
+            self.gcode_command = b"G21 G91 G1 X1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
             pass
@@ -598,6 +612,7 @@ class Ui_MainWindow(QMainWindow):
         self.connectGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         #======================BUTTON ACTIONS===========================#
         self.captureButton.clicked.connect(self.captureButtonClicked)
+        self.detectButton.clicked.connect(self.goToDetect)
         self.grblUP.clicked.connect(self.moveUp)
         self.grblDOWN.clicked.connect(self.moveDown)
         self.grblLEFT.clicked.connect(self.moveLeft)
@@ -814,7 +829,7 @@ class VideoCapture(QThread):
         self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
         self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
         self.capture.set(cv2.CAP_PROP_FPS, 5)
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 10)
         while self.ThreadActive:
             ret, frame = self.capture.read()
             if ret:

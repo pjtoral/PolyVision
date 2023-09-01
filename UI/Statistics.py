@@ -28,7 +28,8 @@ class StatisticsUI(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground)
         layout = QHBoxLayout()
         self.tabs = QTabWidget()
-
+        self.tabs.setTabsClosable(True)  # Enable tab closing
+        self.tabs.tabCloseRequested.connect(self.close_tab)
 
         self.shape_content_widget = QWidget()
         self.shape_content_widget.setStyleSheet("background-color: #FFFFFF;")
@@ -168,6 +169,10 @@ class StatisticsUI(QDialog):
         self.close_signal.emit()
         self.close()
 
+    def close_tab(self, index):
+        # Close the tab requested by its index
+        self.tabs.removeTab(index)
+        
     def hide_all_tabs(self):
       for i in range(3, -1, -1):
         self.tabs.removeTab(i)

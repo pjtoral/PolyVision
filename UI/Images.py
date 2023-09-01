@@ -134,8 +134,6 @@ class ImagesUI(QDialog):
         particle_details_layout.addWidget(underline_magnification)
         particle_details_layout.addWidget(self.notes_label)
 
-
-
         left_layout.addLayout(particle_details_layout)
         left_layout.addStretch()
 
@@ -176,9 +174,9 @@ class ImagesUI(QDialog):
         self.scrape_folder(file_path)  
         self.scroll_widget_layout.addLayout(self.grid_layout)  
         scroll_area.setWidget(self.scroll_widget)
+        
         main_layout.addWidget(scroll_area) 
         main_layout.addWidget(self.left_widget, stretch=0)
-        
 
         self.filaments_checkbox.stateChanged.connect(self.on_filter_changed)
         self.fragments_checkbox.stateChanged.connect(self.on_filter_changed)
@@ -239,7 +237,6 @@ class ImagesUI(QDialog):
             container.setStyleSheet("padding-top: 10px;padding-left: 10px;padding-right: 10px;   background-color: #D3D3D3;")
             self.image_pathway = label.image_path
 
-
         label.mousePressEvent = lambda event, label=label: on_image_clicked(label)
 
         name_label = QLabel(image_name)
@@ -251,7 +248,6 @@ class ImagesUI(QDialog):
         container_layout.addWidget(name_label)
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setAlignment(Qt.AlignTop)
-
         container.setStyleSheet("padding-top: 10px;padding-left: 10px;padding-right: 10px;  background-color: transparent;")  # Set container background transparent
 
         return container, label
@@ -302,10 +298,30 @@ class ImagesUI(QDialog):
         min_width_str = self.width_min_input.text()
         max_width_str = self.width_max_input.text()
 
-        min_length = float(min_length_str) if min_length_str else 0.0
-        max_length = float(max_length_str) if max_length_str else float('inf')
-        min_width = float(min_width_str) if min_width_str else 0.0
-        max_width = float(max_width_str) if max_width_str else float('inf')
+        try:
+            min_length = float(min_length_str) if min_length_str else 0.0
+        except ValueError:
+            min_length = 0.0
+            self.length_min_input.setText("")
+
+        try:
+            max_length = float(max_length_str) if max_length_str else float('inf')
+        except ValueError:
+            max_length = float('inf')
+            self.length_max_input.setText("")
+
+        try:
+            min_width = float(min_width_str) if min_width_str else 0.0
+        except ValueError:
+            min_width = 0.0
+            self.width_min_input.setText("")
+        try:
+            max_width = float(max_width_str) if max_width_str else float('inf')
+        except ValueError:
+            max_width = float('inf')
+            self.width_max_input.setText("")
+
+
 
         data = get_image_data(label[1].folder_path, label[1].image_name)
         if data:
