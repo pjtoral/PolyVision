@@ -32,9 +32,9 @@ class Ui_MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.VideoCapture = VideoCapture()
-        self.VideoCapture.start()
-        self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
+        # self.VideoCapture = VideoCapture()
+        # self.VideoCapture.start()
+        # self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
@@ -296,7 +296,7 @@ class Ui_MainWindow(QMainWindow):
 
     def moveUp(self):
         if self.ser:
-            print("right")
+            print("UP")
             self.gcode_command = b"G21 G91 G1 Y1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
@@ -304,7 +304,7 @@ class Ui_MainWindow(QMainWindow):
 
     def moveDown(self):
         if self.ser: 
-            print("right")
+            print("DOWN")
             self.gcode_command = b"G21 G91 G1 Y-1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
@@ -312,7 +312,7 @@ class Ui_MainWindow(QMainWindow):
 
     def moveLeft(self):
         if self.ser:
-            print("right")
+            print("LEFT")
             self.gcode_command = b"G21 G91 G1 X-1 F100\r\n"
             self.ser.write(self.gcode_command)
         else:
@@ -320,8 +320,16 @@ class Ui_MainWindow(QMainWindow):
 
     def moveRight(self):
         if self.ser:
-            print("right")
+            print("RIGHT")
             self.gcode_command = b"G21 G91 G1 X1 F100\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
+
+    def moveHome(self):
+        if self.ser:
+            print("home")
+            self.gcode_command = b"$H\r\n"
             self.ser.write(self.gcode_command)
         else:
             pass
@@ -617,6 +625,7 @@ class Ui_MainWindow(QMainWindow):
         self.grblDOWN.clicked.connect(self.moveDown)
         self.grblLEFT.clicked.connect(self.moveLeft)
         self.grblRIGHT.clicked.connect(self.moveRight)
+        self.grblHOME.clicked.connect(self.moveHome)
         self.statisticsButton.clicked.connect(self.goToStatistics)
         self.settingsButton.clicked.connect(self.goToSettings)
         self.imagesButton.clicked.connect(self.goToCurrentImages)
@@ -826,17 +835,23 @@ class VideoCapture(QThread):
     def run(self):
         self.ThreadActive = True
         self.capture = cv2.VideoCapture(0) #this is default camera
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
+        # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
+        # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
         self.capture.set(cv2.CAP_PROP_FPS, 5)
         self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 10)
         while self.ThreadActive:
             ret, frame = self.capture.read()
             if ret:
-                FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
+                # #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD 
+                # self.ImageUpdate.emit(ConvertToQtFormat)
+                Image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                FlippedImage = cv2.flip(Image, 1)
                 ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
-                #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD )
-                self.ImageUpdate.emit(ConvertToQtFormat)
+                Pic = ConvertToQtFormat.scaled(980, 980, Qt.KeepAspectRatio)
+                self.ImageUpdate.emit(Pic)
+                
 
     def stop(self):
         self.ThreadActive = False

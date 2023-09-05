@@ -1,25 +1,25 @@
 import os
 import sqlite3
 
-# # Function to create the main database and tables
-# def create_main_database(database_name):
-#     if not os.path.exists(database_name):
-#         os.makedirs(database_name)
+# Function to create the main database and tables
+def create_main_database(database_name):
+    if not os.path.exists(database_name):
+        os.makedirs(database_name)
 
-#     main_db_path = os.path.join(database_name, 'main_database.db')
+    main_db_path = os.path.join(database_name, 'main_database.db')
 
-#     connection = sqlite3.connect(main_db_path)
-#     c = connection.cursor()
+    connection = sqlite3.connect(main_db_path)
+    c = connection.cursor()
 
-#     # Create a table to store the list of databases
-#     c.execute("""CREATE TABLE IF NOT EXISTS database_list (
-#             database_name text,
-#             location text,
-#             creation_date text
-#         )""")
+    # Create a table to store the list of databases
+    c.execute("""CREATE TABLE IF NOT EXISTS database_list (
+            database_name text,
+            location text,
+            creation_date text
+        )""")
 
-#     connection.commit()
-#     connection.close()
+    connection.commit()
+    connection.close()
 
 # Function to add a new database entry to the main database
 def add_database_entry(database_name, location, creation_date):
