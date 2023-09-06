@@ -26,15 +26,16 @@ from PIL import ImageEnhance
 from SelfDestructingMessageBox import *
 from GridOverlay import GridOverlay
 from Detect import DetectUI
+from GRBL import GrblUI
 
 
 class Ui_MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        # self.VideoCapture = VideoCapture()
-        # self.VideoCapture.start()
-        # self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
+        self.VideoCapture = VideoCapture()
+        self.VideoCapture.start()
+        self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
         self.available_ports = list(serial.tools.list_ports.comports())
         self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
         self.ser = None
@@ -182,7 +183,7 @@ class Ui_MainWindow(QMainWindow):
         self.measuring = False
         self.measureButton.setText("Measure")
         QApplication.setOverrideCursor(QCursor(Qt.ArrowCursor))
-        #self.paused = False
+        self.paused = False
         self.lengthLabel.setVisible(False)
         if self.capturing :
             if self.lengthClicked == 1:
@@ -247,20 +248,7 @@ class Ui_MainWindow(QMainWindow):
         pixmap = QPixmap.fromImage(qimage)
         self.graphicsView.setPixmap(pixmap)
 
-    #accessing COM ports
-    def serialConnect(self):
-        self.port = self.dropDown.currentText().split(" - ")[0] 
-        print("Selected COM port:", self.port)
-        try:
-            self.ser = serial.Serial(self.port, baudrate=115200)
-            time.sleep(2)
-            print("Connected to GRBL")
-            # self.VideoCapture = VideoCapture()
-            # self.VideoCapture.start()
-            # self.VideoCapture.ImageUpdate.connect(self.ImageUpdateSlot)
-        except serial.SerialException as e:
-            print("Error opening serial port:", e)
-            pass
+
     def mouseReleaseEvent(self, event):
         pass
 
@@ -293,6 +281,32 @@ class Ui_MainWindow(QMainWindow):
     def setPausedFalse(self):
         print("im here")
         self.paused = False
+
+    #accessing COM ports
+    def serialConnect(self):
+       
+        if not self.ser:
+            self.port = self.dropDown.currentText().split(" - ")[0] 
+            print("Selected COM port:", self.port)
+            try:
+                self.ser = serial.Serial(self.port, baudrate=115200)
+                time.sleep(2)
+                print("Connected to GRBL")
+                self.connectGRBL.setText("Disconnect")
+                grbl = GrblUI()
+                grbl.exec()
+                #====== ADD AUTOMATION HERE=======#
+            except serial.SerialException as e:
+                print("Error opening serial port:", e)
+                pass
+        else:
+            try:
+                self.ser.close() 
+                print("Disconnected from GRBL")
+                self.connectGRBL.setText("Connect")  
+                self.ser = None
+            except serial.SerialException as e:
+                print("Error closing serial port:", e)
 
     def moveUp(self):
         if self.ser:
@@ -344,6 +358,11 @@ class Ui_MainWindow(QMainWindow):
             self.grid_overlay.setVisible(True)
         else:
             self.grid_overlay.setVisible(False)
+
+    def refresh(self):
+        self.available_ports = list(serial.tools.list_ports.comports())
+        self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
+        self.dropDown.addItems(self.comports)
 
     def on_new_action(self):
         new_file_widget = NewFileUI()
@@ -419,10 +438,13 @@ class Ui_MainWindow(QMainWindow):
         self.xValue             =   QtWidgets.QLabel(self.centralwidget)
         self.yLabel             =   QtWidgets.QLabel(self.centralwidget)
         self.yValue             =   QtWidgets.QLabel(self.centralwidget)
-        self.applTitle          =   QtWidgets.QLabel(self.centralwidget)
+        self.appTitle           =   QtWidgets.QLabel(self.centralwidget)
         self.dropDown           =   QtWidgets.QComboBox(self.centralwidget)
         self.grid_overlay       =   GridOverlay(self.centralwidget)
-        
+        self.appLogo            =   QtWidgets.QLabel(self.centralwidget)  
+        self.filamentValue      =   QtWidgets.QLabel(self.centralwidget)     
+
+
         if self.image_settings.get("grid_overlay"):
             self.grid_overlay.setVisible(True)
         else:
@@ -430,91 +452,13 @@ class Ui_MainWindow(QMainWindow):
 
         self.dropDown.addItems(self.comports)
         self.dropDown.setFocusPolicy(Qt.NoFocus)
+        self.dropDown.activated.connect(self.refresh)
         self.centralwidget.setObjectName("centralwidget")
         self.progressBar.setProperty("value", 16)
         self.progressBar.setObjectName("progressBar")
-        
-        #this is for the OpenCV Video
-        self.graphicsView.setStyleSheet("background-color: rgb(0, 0, 0);")
-        self.graphicsView.setObjectName("graphicsView")
-        self.currentStatus.setObjectName("currentStatus")
-        self.placeValue.setObjectName("placeValue" )
-        self.locationLabel.setStyleSheet("color:#fbbf16;")
-        self.locationLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.locationLabel.setObjectName("locationLabel")
-        self.locationValue.setStyleSheet("")
-        self.locationValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.locationValue.setObjectName("locationValue")
-        self.dataLabel.setStyleSheet("color:#fbbf16;")
-        self.dataLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.dataLabel.setObjectName("dataLabel")
-        self.dateValue.setStyleSheet("")
-        self.dateValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.dateValue.setObjectName("dateValue")
-        self.focusLabel.setStyleSheet("color:#fbbf16;")
-        self.focusLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.focusLabel.setObjectName("focusLabel")
-        self.focusValue.setStyleSheet("")
-        self.focusValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.focusValue.setObjectName("focusValue")
-        self.statusLabel.setStyleSheet("color:#fbbf16;")
-        self.statusLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.statusLabel.setObjectName("statusLabel")
-        self.statusValue.setStyleSheet("")
-        self.statusValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.statusValue.setObjectName("statusValue")
-        self.detectionLabel.setStyleSheet("color:#fbbf16;")
-        self.detectionLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.detectionLabel.setObjectName("detectionLabel")
-        self.detectionValue.setStyleSheet("")
-        self.detectionValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.detectionValue.setObjectName("detectionValue")
-        self.progressLabel.setStyleSheet("color:#fbbf16;")
-        self.progressLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.progressLabel.setObjectName("progressLabel")
-        self.grblTitle.setObjectName("grblTitle")
-        self.realTimeLabel.setObjectName("realTimeLabel")
-        self.highLabel.setStyleSheet("color:#fbbf16;")
-        self.highLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.highLabel.setObjectName("highLabel")
-        self.moderateLabel.setStyleSheet("color:#fbbf16;")
-        self.moderateLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.moderateLabel.setObjectName("moderateLabel")
-        self.lowLabel.setStyleSheet("color:#fbbf16;")
-        self.lowLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.lowLabel.setObjectName("lowLabel")
-        self.highValue.setStyleSheet("")
-        self.highValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.highValue.setObjectName("highValue")
-        self.moderateValue.setStyleSheet("")
-        self.moderateValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.moderateValue.setObjectName("moderateValue")
-        self.lowValue.setStyleSheet("")
-        self.lowValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.lowValue.setObjectName("lowValue")
-        self.classLabel.setObjectName("classLabel")
-        self.filamentLabel.setStyleSheet("color:#fbbf16;")
-        self.filamentLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.filamentLabel.setObjectName("filamentLabel")
-        self.fragmentLabel.setStyleSheet("color:#fbbf16;")
-        self.fragmentLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.fragmentLabel.setObjectName("fragmentLabel")
-        self.filmValue.setStyleSheet("")
-        self.filmValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.filmValue.setObjectName("filmValue")
-        self.fragmentValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.fragmentValue.setObjectName("fragmentValue")
-        self.filmLabel.setStyleSheet("color:#fbbf16;")
-        self.filmLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.filmLabel.setObjectName("filmLabel")    
-        self.applTitle.setObjectName("applTitle")
-        self.appLogo = QtWidgets.QLabel(self.centralwidget)    
         self.appLogo.setPixmap(QtGui.QPixmap("res/PolyVisionLogo.png"))
         self.appLogo.setScaledContents(True)
-        self.appLogo.setObjectName("appLogo")
-        self.filamentValue = QtWidgets.QLabel(self.centralwidget)    
-        self.filamentValue.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        self.filamentValue.setObjectName("filamentValue")
+
         
         #setting font for labels
         font = QtGui.QFont()
@@ -561,9 +505,10 @@ class Ui_MainWindow(QMainWindow):
         self.yValue.setFont(font)
         
         #seeting font for app Title
-        font.setFamily("Segoe UI Historic")
-        font.setPointSize(18)
-        self.applTitle.setFont(font)
+        font.setFamily("Gotham")
+        font.setPointSize(14)
+        font.setBold(True)
+        self.appTitle.setFont(font)
         
         #setting font for section titles
         font.setPointSize(11)
@@ -576,7 +521,7 @@ class Ui_MainWindow(QMainWindow):
         font.setPointSize(22)
         self.placeValue.setFont(font)
         
-        #Capture Button for Images
+        #===============Capture Button for Images=========================#
         self.captureButton      = QtWidgets.QPushButton(self.centralwidget) 
         self.measureButton      = QtWidgets.QPushButton(self.centralwidget)        
         self.detectButton       = QtWidgets.QPushButton(self.centralwidget)
@@ -590,18 +535,23 @@ class Ui_MainWindow(QMainWindow):
         self.grblHOME           = QtWidgets.QPushButton(self.centralwidget)
         self.connectGRBL        = QtWidgets.QPushButton(self.centralwidget)
 
-        self.captureButton.setObjectName("captureButton")
-        self.measureButton.setObjectName("measureButton")
-        self.grblUP.setObjectName("grblUP")
-        self.grblDOWN.setObjectName("grblDOWN")
-        self.grblLEFT.setObjectName("grblLEFT")
-        self.grblRIGHT.setObjectName("grblRIGHT")
-        self.grblHOME.setObjectName("grblHOME")
-        self.detectButton.setObjectName("detectButton")
-        self.imagesButton.setObjectName("imagesButton")
-        self.statisticsButton.setObjectName("statisticsButton")
-        self.settingsButton.setObjectName("settingsButton")
-        self.connectGRBL.setObjectName("connectGRBL")
+
+  
+        #==================Stylesheets======================#
+        #self.graphicsView.setStyleSheet("background-color: rgb(255,255,255);") #White
+        self.graphicsView.setStyleSheet("background-color: rgb(0,0,0);") #Black
+        self.filmLabel.setStyleSheet("color:#fbbf16;")
+        self.fragmentLabel.setStyleSheet("color:#fbbf16;")
+        self.filamentLabel.setStyleSheet("color:#fbbf16;")
+        self.lowLabel.setStyleSheet("color:#fbbf16;")
+        self.moderateLabel.setStyleSheet("color:#fbbf16;")
+        self.highLabel.setStyleSheet("color:#fbbf16;")
+        self.progressLabel.setStyleSheet("color:#fbbf16;")
+        self.detectionLabel.setStyleSheet("color:#fbbf16;")
+        self.statusLabel.setStyleSheet("color:#fbbf16;")
+        self.locationLabel.setStyleSheet("color:#fbbf16;")
+        self.dataLabel.setStyleSheet("color:#fbbf16;")
+        self.focusLabel.setStyleSheet("color:#fbbf16;")
         self.captureButton.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.measureButton.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
         self.detectButton.setStyleSheet("QPushButton {\n""background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 rgba(0, 133, 63, 255), stop:0.909091 rgba(255, 255, 255, 167));\n""    color: #000000;\n""    font: bold 16px;\n""    border-radius: 0px;\n""    border-color: #FFFFFF;\n""}\n""QPushButton:hover {\n""   \n""    color: #FFFFFF;\n""}\n""")
@@ -618,6 +568,7 @@ class Ui_MainWindow(QMainWindow):
         self.xWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.zWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.connectGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        
         #======================BUTTON ACTIONS===========================#
         self.captureButton.clicked.connect(self.captureButtonClicked)
         self.detectButton.clicked.connect(self.goToDetect)
@@ -634,7 +585,7 @@ class Ui_MainWindow(QMainWindow):
         self.graphicsView.mouseReleaseEvent = self.mouseReleaseEvent
         self.connectGRBL.clicked.connect(self.serialConnect)
         #======================APP&LOGOS COORDNT========================#
-        self.applTitle       .setGeometry(QtCore.QRect(100, 70, 140, 30))
+        self.appTitle       .setGeometry(QtCore.QRect(100, 70, 140,40))
         self.appLogo         .setGeometry(QtCore.QRect(30, 60, 60, 50))
         #=====================MAIN VIEW COORDINATES=====================#
         self.progressLabel   .setGeometry(QtCore.QRect(290, 880, 80, 30))
@@ -671,7 +622,7 @@ class Ui_MainWindow(QMainWindow):
         self.statusValue     .setGeometry(QtCore.QRect(1745, 500, 100, 30))
         self.detectionLabel  .setGeometry(QtCore.QRect(1595, 530, 135, 30))
         self.detectionValue  .setGeometry(QtCore.QRect(1745, 530, 100, 30))
-         #====================PICTURE COORDINATES=========================#
+        #====================PICTURE COORDINATES=========================#
         self.captureButton   .setGeometry(QtCore.QRect(1600, 570, 140, 50))
         self.measureButton   .setGeometry(QtCore.QRect(1750, 570, 140, 50))
         #======================GRBL COORDINATES=========================#
@@ -741,9 +692,9 @@ class Ui_MainWindow(QMainWindow):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "PolyVision"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "PlastiScan"))
 
-        #Labels
+        #==============Setting Label Texts=======================#
         self.locationLabel.setText(_translate("MainWindow", "Location:"))
         self.dataLabel.setText(_translate("MainWindow", "Date Sampled:"))
         self.focusLabel.setText(_translate("MainWindow", "Focus:"))
@@ -760,7 +711,7 @@ class Ui_MainWindow(QMainWindow):
         self.filamentLabel.setText(_translate("MainWindow", "Filaments:"))
         self.fragmentLabel.setText(_translate("MainWindow", "Fragments:"))
         self.filmLabel.setText(_translate("MainWindow", "Films:"))
-        self.applTitle.setText(_translate("MainWindow", "PolyVision"))
+        self.appTitle.setText(_translate("MainWindow", "PlastiScan"))
         self.captureButton.setText(_translate("MainWindow", "Capture"))
         self.measureButton.setText(_translate("MainWindow", "Measure"))
         self.grblUP.setText(_translate("MainWindow", "↑"))
@@ -786,35 +737,31 @@ class Ui_MainWindow(QMainWindow):
         #Menu Bar
         self.menuFile.setTitle(_translate("MainWindow", "File"))
         self.menuEdit.setTitle(_translate("MainWindow", "Edit"))
-
         self.actionSave.setText(_translate("MainWindow", "Save"))
         self.actionSave.setStatusTip(_translate("MainWindow", "Save current file"))
         self.actionSave.setShortcut(_translate("MainWindow", "Ctrl+S"))
-
         self.actionSave_As.setText(_translate("MainWindow", "Save As"))
         self.actionSave_As.setStatusTip(_translate("MainWindow", "Save a file as..."))
         self.actionSave_As.setShortcut(_translate("MainWindow", "Ctrl+Shift+S"))
-
         self.actionUndo.setText(_translate("MainWindow", "Undo"))
         self.actionUndo.setStatusTip(_translate("MainWindow", "Undo edits"))
         self.actionUndo.setShortcut(_translate("MainWindow", "Ctrl+Z"))
-
         self.actionRedo.setText(_translate("MainWindow", "Redo"))
         self.actionRedo.setStatusTip(_translate("MainWindow", "Redo edit"))
         self.actionRedo.setShortcut(_translate("MainWindow", "Ctrl+Shift+Z"))
-
         self.actionCopy.setText(_translate("MainWindow", "Copy"))
         self.actionCopy.setStatusTip(_translate("MainWindow", "Copy a file"))
         self.actionCopy.setShortcut(_translate("MainWindow", "Ctrl+C"))
-
         self.actionPaste.setText(_translate("MainWindow", "Paste"))
         self.actionPaste.setStatusTip(_translate("MainWindow", "Paste a file"))
         self.actionPaste.setShortcut(_translate("MainWindow", "Ctrl+V"))
-
         self.actionNew.setText(_translate("MainWindow", "New"))
         self.actionNew.setStatusTip(_translate("MainWindow", "Create New file"))
         self.actionNew.setShortcut(_translate("MainWindow", "Ctrl+N"))
+
+        #===========Menu Bar Actions=============#
         self.actionNew.triggered.connect(self.on_new_action)
+
 
         self.captureButton.setEnabled(False)
         self.measureButton.setEnabled(False)
@@ -837,20 +784,23 @@ class VideoCapture(QThread):
         self.capture = cv2.VideoCapture(0) #this is default camera
         # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
         # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
-        self.capture.set(cv2.CAP_PROP_FPS, 5)
-        self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 10)
+        # self.capture.set(cv2.CAP_PROP_FPS, 2)
+        # self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 100)
+        frame_count = 0
         while self.ThreadActive:
             ret, frame = self.capture.read()
-            if ret:
-                # FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                # ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
-                # #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD 
-                # self.ImageUpdate.emit(ConvertToQtFormat)
-                Image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                FlippedImage = cv2.flip(Image, 1)
-                ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
-                Pic = ConvertToQtFormat.scaled(980, 980, Qt.KeepAspectRatio)
-                self.ImageUpdate.emit(Pic)
+            frame_count += 1
+            if frame_count % 5 == 0:
+                if ret:
+                    # FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    # ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
+                    # #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD 
+                    # self.ImageUpdate.emit(ConvertToQtFormat)
+                    Image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    FlippedImage = cv2.flip(Image, 1)
+                    ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
+                    Pic = ConvertToQtFormat.scaled(1280, 720, Qt.KeepAspectRatio)
+                    self.ImageUpdate.emit(Pic)
                 
 
     def stop(self):
