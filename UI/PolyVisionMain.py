@@ -24,9 +24,12 @@ from Settings import SettingsUI
 import json
 from PIL import ImageEnhance
 from SelfDestructingMessageBox import *
+from OkayMessageBox import *
 from GridOverlay import GridOverlay
 from Detect import DetectUI
 from GRBL import GrblUI
+from LiveDetect import *
+from CalibrationUI import CalibrateUI
 
 
 class Ui_MainWindow(QMainWindow):
@@ -45,11 +48,14 @@ class Ui_MainWindow(QMainWindow):
         self.points = []
         self.distance = 0
         self.capturing = False
+        self.automated = False
+        self.calibrating = False
+        self.settings = None
         with open("user_settings.json", "r") as f:
-                settings_data = json.load(f)
-        self.image_settings = settings_data.get("image_settings", {})
+                self.settings_data = json.load(f)
+        self.image_settings = self.settings_data.get("image_settings", {})
 
-    
+
     #updating live feed in different Thread
     def ImageUpdateSlot(self, Image):
         if not self.paused:
@@ -88,7 +94,14 @@ class Ui_MainWindow(QMainWindow):
         self.capture.length_clicked.connect(self.onLengthClicked)
         self.capture.width_clicked.connect(self.onWidthClicked)
         self.capture.save_clicked.connect(self.saving)
-        self.capture.exec_() 
+        self.capture.on_rejected.connect(self.captureClose)
+        self.capture.exec_()
+            
+    
+    def captureClose(self):
+        self.VideoCapture.start()
+        self.paused = False
+
       
     def captureCurrentFrame(self):
         pixmap = self.graphicsView.pixmap()
@@ -97,10 +110,10 @@ class Ui_MainWindow(QMainWindow):
     def saving(self):
         try:
             image = Image.fromqimage(self.frame)
-            sized = image.resize((2560, 1440), Image.LANCZOS)
+            sized = image.resize((1600, 900), Image.LANCZOS)
             sharpened = self.adjust_sharpness(sized, (self.imageSharpnes() / 100))
             saturated = self.adjust_saturation(sharpened, (self.imageSaturation() / 100))
-            self.saveFrame(saturated)
+            self.saveFrame(image)
         except Exception as e:
             print("Error occurred during image processing and saving:", e)
 
@@ -199,18 +212,19 @@ class Ui_MainWindow(QMainWindow):
         if self.measuring and (event.button() == Qt.LeftButton):
             posGlobal = event.globalPos()
             pos = self.graphicsView.mapFromGlobal(posGlobal)
-            self.points.append((pos.x(), pos.y()-40))
-            self.currentPos = (pos.x(), pos.y()-40)
+            self.points.append((pos.x(), pos.y()))
+            self.currentPos = (pos.x(), pos.y())
             pixmap = self.graphicsView.pixmap()
             qimage = pixmap.toImage()
             painter = QPainter(qimage)
             pen = QPen(Qt.gray)
             pen.setWidth(4)
             painter.setPen(pen)
-            painter.drawPoint(pos.x(),pos.y()-40)
+            painter.drawPoint(pos.x(),pos.y())
             painter.end()
             self.graphicsView.setPixmap(QPixmap.fromImage(qimage))
             self.paintEvent()
+
         else:
             super().mousePressEvent(event)
 
@@ -241,14 +255,52 @@ class Ui_MainWindow(QMainWindow):
         distance.append(distanceLoc)
         for i in range(len(distance)):
             self.distance = self.distance + distance[i]
-        distanceShow = self.distance*self.calibration
-        formatted_distance = "{:.2f}".format(distanceShow)
-        self.lengthLabel.setText(str(formatted_distance))
+
         painter.end()
         pixmap = QPixmap.fromImage(qimage)
         self.graphicsView.setPixmap(pixmap)
 
 
+        if self.calibrating and (len(self.points) == 2):
+            self.calculatePixelDistanceRation()
+
+        distanceShow = self.distance*self.calibration
+        formatted_distance = "{:.2f}".format(distanceShow)
+        self.lengthLabel.setText(str(formatted_distance))
+
+    def calibrate(self):
+        if self.settings is not None:
+            self.settings.hide()
+        self.calibrating = True 
+        self.measuring = False
+        self.measureLength()
+
+    def calculatePixelDistanceRation(self):
+        calibrateUI = CalibrateUI()
+        if calibrateUI.exec_() == QtWidgets.QDialog.Accepted:
+            actual = calibrateUI.distance_edit.text()
+            try:
+                integer_value = int(actual)
+                self.calibration = integer_value/self.distance  
+                #add saving of calibration and close show setting UI again
+                self.image_settings["calibration"] = self.calibration
+                self.settings.show()
+                # Update settings_data dictionary
+                self.settings_data["image_settings"] = self.image_settings
+                file_path = "user_settings.json"  
+                with open(file_path, "w") as f:
+                    json.dump(self.settings_data, f, indent=4) 
+                self.calibrating = False
+            except ValueError:
+                print("Input is not a valid integer.")
+            
+
+            file_path = "user_settings.json"  
+            settings_data = {} 
+            if os.path.exists(file_path):
+                with open(file_path, "r") as f:
+                    settings_data = json.load(f)
+            
     def mouseReleaseEvent(self, event):
         pass
 
@@ -262,6 +314,7 @@ class Ui_MainWindow(QMainWindow):
     def goToSettings(self):
         self.settings = SettingsUI()
         self.settings.apply_clicked.connect(self.set)
+        self.settings.calibration_clicked.connect(self.calibrate)
         self.settings.show()
         
     def goToCurrentImages(self):
@@ -293,9 +346,12 @@ class Ui_MainWindow(QMainWindow):
                 time.sleep(2)
                 print("Connected to GRBL")
                 self.connectGRBL.setText("Disconnect")
-                grbl = GrblUI()
-                grbl.exec()
+                self.grbl = GrblUI()
                 #====== ADD AUTOMATION HERE=======#
+                self.grbl.auto_clicked.connect(self.autoScan)
+                self.grbl.manual_clicked.connect(self.manualScan)
+                self.grbl.show()
+               
             except serial.SerialException as e:
                 print("Error opening serial port:", e)
                 pass
@@ -347,7 +403,87 @@ class Ui_MainWindow(QMainWindow):
             self.ser.write(self.gcode_command)
         else:
             pass
-        
+
+    def emergencyStop(self):
+        if self.ser:
+            print("stop")
+            self.gcode_command = b"$X\r\n"
+            self.ser.write(self.gcode_command)
+        else:
+            pass
+
+    def autoScan(self):
+        self.high = 0 
+        self.med = 0 
+        self.low = 0 
+        print("here")
+        self.statusValue.setText("Scanning..")
+        self.detectionValue.setText("ON")
+        self.automated = True
+        #self.moveHome()
+        dialog = OkayMessageBox("Place Petri Dish. Click Okay when finished.")
+        result = dialog.exec_()
+        if result == QDialog.Accepted:
+            print("petridish placed -> continue")
+            #loop while petridish is unscanned
+            #while position is not back in home
+    
+            self.paused = True #pause while moving
+            #Move to top corner 
+            self.paused = False #unpause
+            currentFrame = self.captureCurrentFrame() #get current frame
+            image = Image.fromqimage(currentFrame)
+            #sized = image.resize((320, 180), Image.LANCZOS)
+            # sized = image.resize((480, 270), Image.LANCZOS)
+            # sized = image.resize((500, 300), Image.LANCZOS)
+            sized = image.resize((640, 360), Image.LANCZOS)
+            #self.toFeed = self.image
+            self.paused = True #pause while requesting from API
+            detector =  DetectMP(sized)
+            if len(detector.get_json()) != 0:
+                low = 0
+                med = 0
+                high = 0
+                for items in detector.get_json():
+                    if items["score"] > 0.70 and items["score"] < 0.80:
+                        low += 1
+                    elif items["score"] > 0.80 and items["score"] < 0.90:
+                        med += 1
+                    elif items["score"] > 0.90 and items["score"] < 1.0:
+                        high += 1
+                self.highValue.setText(str(high)) 
+                self.moderateValue.setText(str(med))  
+                self.lowValue.setText(str(low)) 
+                print("With MP")
+                new_image = BoundingBox(sized, detector.get_json())
+                rgb_image = new_image.get_image()
+                height, width, channel = rgb_image.shape
+                bytes_per_line = 3 * width
+                qimage = QtGui.QImage(rgb_image.data, width, height, bytes_per_line, QtGui.QImage.Format_RGB888)
+                # imageConv = Image.fromqimage(qimage)
+                # resize = imageConv.resize((1280, 720), Image.LANCZOS)
+                # qimage2 = ImageQt(resize)
+                qpixmap = QPixmap.fromImage(qimage)
+                self.graphicsView.setPixmap(qpixmap)
+                self.graphicsView.setScaledContents(True)
+                dialog = OkayMessageBox("Microplastic Found. Capture Image.") 
+                continued = dialog.exec_()
+                if continued  == QDialog.Accepted or continued == QDialog.Rejected:
+                   self.paused = False
+
+            else:
+                print("No MP")
+                self.paused = False
+            # self.paused = False
+            
+        else:
+            pass
+
+    def manualScan(self):
+        print("here")
+        self.automated = False
+        pass
+
     def closeEvent(self, event):
         self.videoCapture.stop()
         self.videoCapture.wait()
@@ -358,11 +494,6 @@ class Ui_MainWindow(QMainWindow):
             self.grid_overlay.setVisible(True)
         else:
             self.grid_overlay.setVisible(False)
-
-    def refresh(self):
-        self.available_ports = list(serial.tools.list_ports.comports())
-        self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
-        self.dropDown.addItems(self.comports)
 
     def on_new_action(self):
         new_file_widget = NewFileUI()
@@ -376,8 +507,11 @@ class Ui_MainWindow(QMainWindow):
             add_database_entry(self.file_name, f"{location}/microplastic.db", sampling_date)
             create_microplastics_database(self.file_name)
             self.paused = False
-            self.statusValue.setText("Scanning...")
-            self.detectionValue.setText("ON")
+            self.statusValue.setText("Idle....")
+            self.detectionValue.setText("OFF")
+            self.highValue.setText("0") 
+            self.moderateValue.setText("0")  
+            self.lowValue.setText("0") 
             self.captureButton.setEnabled(True)
             self.grblUP.setEnabled(True)
             self.grblUP.setEnabled(True)
@@ -390,6 +524,11 @@ class Ui_MainWindow(QMainWindow):
             self.detectButton.setEnabled(True)
             self.statisticsButton.setEnabled(True)
             self.measureButton.setEnabled(True)
+            self.emergencyGRBL.setEnabled(True)
+            self.calibrateBTN.setEnabled(True)
+            self.available_ports = list(serial.tools.list_ports.comports())
+            self.comports = [f"{port.device} - {port.description.split(' (')[0].strip()}" for port in self.available_ports]
+            self.dropDown.addItems(self.comports)
 
     #defining pyQt5 widgets
     def setupUi(self, MainWindow):
@@ -444,17 +583,15 @@ class Ui_MainWindow(QMainWindow):
         self.appLogo            =   QtWidgets.QLabel(self.centralwidget)  
         self.filamentValue      =   QtWidgets.QLabel(self.centralwidget)     
 
-
+        #self.graphicsView.setScaledContents(True)
         if self.image_settings.get("grid_overlay"):
             self.grid_overlay.setVisible(True)
         else:
             self.grid_overlay.setVisible(False)
 
-        self.dropDown.addItems(self.comports)
         self.dropDown.setFocusPolicy(Qt.NoFocus)
-        self.dropDown.activated.connect(self.refresh)
         self.centralwidget.setObjectName("centralwidget")
-        self.progressBar.setProperty("value", 16)
+        self.progressBar.setProperty("value", 0)
         self.progressBar.setObjectName("progressBar")
         self.appLogo.setPixmap(QtGui.QPixmap("res/PolyVisionLogo.png"))
         self.appLogo.setScaledContents(True)
@@ -534,6 +671,8 @@ class Ui_MainWindow(QMainWindow):
         self.grblRIGHT          = QtWidgets.QPushButton(self.centralwidget) 
         self.grblHOME           = QtWidgets.QPushButton(self.centralwidget)
         self.connectGRBL        = QtWidgets.QPushButton(self.centralwidget)
+        self.emergencyGRBL      = QtWidgets.QPushButton(self.centralwidget)
+        self.calibrateBTN       = QtWidgets.QPushButton(self.centralwidget)
 
 
   
@@ -568,7 +707,9 @@ class Ui_MainWindow(QMainWindow):
         self.xWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.zWidget.setStyleSheet(u"\n""border: 1px solid #d3d3d3;\n""border-radius: 10px;\n" "background-color: transparent;\n")
         self.connectGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
-        
+        self.emergencyGRBL.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+        self.calibrateBTN.setStyleSheet("QPushButton {\n""    background-color: #fbbf16;\n""    color: #FFFFFF;\n""    font: bold 16px;\n""    border-radius: 10px;\n""    border-color: #fbbf16;\n""}\n""QPushButton:hover {\n""    background-color: #9e780e;\n""}")
+
         #======================BUTTON ACTIONS===========================#
         self.captureButton.clicked.connect(self.captureButtonClicked)
         self.detectButton.clicked.connect(self.goToDetect)
@@ -584,14 +725,16 @@ class Ui_MainWindow(QMainWindow):
         self.graphicsView.mousePressEvent = self.mousePressEvent
         self.graphicsView.mouseReleaseEvent = self.mouseReleaseEvent
         self.connectGRBL.clicked.connect(self.serialConnect)
+        self.emergencyGRBL.clicked.connect(self.emergencyStop)
+        self.calibrateBTN.clicked.connect(self.calibrate)
         #======================APP&LOGOS COORDNT========================#
         self.appTitle       .setGeometry(QtCore.QRect(100, 70, 140,40))
         self.appLogo         .setGeometry(QtCore.QRect(30, 60, 60, 50))
         #=====================MAIN VIEW COORDINATES=====================#
-        self.progressLabel   .setGeometry(QtCore.QRect(290, 880, 80, 30))
-        self.progressBar     .setGeometry(QtCore.QRect(380, 890, 1200, 20))
-        self.graphicsView    .setGeometry(QtCore.QRect(290, 70, 1280, 800))
-        self.grid_overlay    .setGeometry(QtCore.QRect(00, 70,1780, 800))
+        self.progressLabel   .setGeometry(QtCore.QRect(290, 817, 80, 30))
+        self.progressBar     .setGeometry(QtCore.QRect(380, 823, 565, 25))
+        self.graphicsView    .setGeometry(QtCore.QRect(290, 90, 1280, 720))
+        self.grid_overlay    .setGeometry(QtCore.QRect(00, 73,1780, 800))
         #======================LOC. COORDINATES=========================#
         self.placeValue      .setGeometry(QtCore.QRect(1595, 60, 320, 50))
         self.locationLabel   .setGeometry(QtCore.QRect(1595, 110, 130, 30))
@@ -639,15 +782,17 @@ class Ui_MainWindow(QMainWindow):
         self.xValue          .setGeometry(QtCore.QRect(1807, 703, 70, 20))
         self.yLabel          .setGeometry(QtCore.QRect(1777, 727, 45, 20))
         self.yValue          .setGeometry(QtCore.QRect(1807, 727, 70, 20))
-        self.dropDown        .setGeometry(QtCore.QRect(1773, 755, 100,30))
+        self.dropDown        .setGeometry(QtCore.QRect(950, 820, 300,30))
+        self.connectGRBL     .setGeometry(QtCore.QRect(1260, 820, 150,30))
+        self.emergencyGRBL   .setGeometry(QtCore.QRect(1420, 820, 150,30))
+        self.calibrateBTN    .setGeometry(QtCore.QRect(1777, 760, 90,65))
         #====================SETTINGS COORDINATES=========================#
         self.detectButton    .setGeometry(QtCore.QRect(0, 170, 261, 41))
         self.imagesButton    .setGeometry(QtCore.QRect(0, 260, 261, 41))
         self.statisticsButton.setGeometry(QtCore.QRect(0, 350, 261, 41))
         self.settingsButton  .setGeometry(QtCore.QRect(0, 440, 261, 41))
-        self.connectGRBL     .setGeometry(QtCore.QRect(1773, 795, 100,30))
+        
         #====================menuBar============================#
-
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -732,7 +877,8 @@ class Ui_MainWindow(QMainWindow):
         self.yLabel.setText(_translate("MainWindow","Y  :"))
         self.yValue.setText(_translate("MainWindow","1000.00"))
         self.connectGRBL.setText(_translate("MainWindow","Connect"))
-
+        self.emergencyGRBL.setText(_translate("MainWindow","Emergency Stop"))
+        self.calibrateBTN.setText(_translate("MainWindow","Calibrate"))
 
         #Menu Bar
         self.menuFile.setTitle(_translate("MainWindow", "File"))
@@ -772,16 +918,18 @@ class Ui_MainWindow(QMainWindow):
         self.grblRIGHT.setEnabled(False)
         self.grblHOME.setEnabled(False)
         self.connectGRBL.setEnabled(False)
+        self.emergencyGRBL.setEnabled(False)
         self.imagesButton.setEnabled(False)
         self.detectButton.setEnabled(False)
         self.statisticsButton.setEnabled(False)
+        self.calibrateBTN.setEnabled(False)
 
 
 class VideoCapture(QThread):
     ImageUpdate = pyqtSignal(QImage)
     def run(self):
         self.ThreadActive = True
-        self.capture = cv2.VideoCapture(0) #this is default camera
+        self.capture = cv2.VideoCapture(1) #this is default camera
         # self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  
         # self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  
         # self.capture.set(cv2.CAP_PROP_FPS, 2)
@@ -790,14 +938,14 @@ class VideoCapture(QThread):
         while self.ThreadActive:
             ret, frame = self.capture.read()
             frame_count += 1
-            if frame_count % 5 == 0:
+            if frame_count % 10 == 0:
                 if ret:
                     # FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     # ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
                     # #changing aspect ratio and scaling feed (keep this in mind for resolution of MP 1280, 720 gives HD 
                     # self.ImageUpdate.emit(ConvertToQtFormat)
-                    Image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    FlippedImage = cv2.flip(Image, 1)
+                    FlippedImage = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    # FlippedImage = cv2.flip(Image, 1)
                     ConvertToQtFormat = QImage(FlippedImage.data, FlippedImage.shape[1], FlippedImage.shape[0], QImage.Format_RGB888)
                     Pic = ConvertToQtFormat.scaled(1280, 720, Qt.KeepAspectRatio)
                     self.ImageUpdate.emit(Pic)
@@ -816,3 +964,4 @@ if __name__ == "__main__":
     ui.setupUi(MainWindow)
     MainWindow.show()
     sys.exit(app.exec_())
+

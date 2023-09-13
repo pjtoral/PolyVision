@@ -4,10 +4,10 @@
     "year_created": "2023",
     "image_settings": {
         "image_quality": "Medium",
-        "image_sharpness": 1,
-        "image_saturation": 8,
+        "image_sharpness": 81,
+        "image_saturation": -5,
         "grid_overlay": false,
-        "calibration": 0.0084
+        "calibration": 0.005675354274829674
     },
     "grbl_settings": {
         "petridish": 100,

@@ -11,6 +11,7 @@ class CaptureUI(QtWidgets.QDialog):
     length_clicked = pyqtSignal()
     width_clicked = pyqtSignal()
     save_clicked = pyqtSignal()
+    on_rejected = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -84,6 +85,9 @@ class CaptureUI(QtWidgets.QDialog):
     def saveFrame(self):
         self.save_clicked.emit()
 
-        
-
+    
+    def closeEvent(self, event):
+        print("here")
+        self.on_rejected.emit()
+        event.accept()
 

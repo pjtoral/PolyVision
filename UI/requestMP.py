@@ -2,6 +2,8 @@ import sys
 import os
 import requests
 import json
+from PIL import Image
+import io
 
 class DetectMP():
     def __init__(self,file_path, parent=None):
@@ -10,10 +12,13 @@ class DetectMP():
 
         # Load the image
         image_path = file_path
-        image = open(image_path, 'rb')
+        image = Image.open(image_path)
+        image = image.resize((640, 640))
+        image_bytes = io.BytesIO()
+        image.save(image_bytes, "PPM")
+        image_bytes.seek(0)
 
-        # Create the payload
-        payload = {'image': image}
+        payload = {'image': image_bytes}
 
         # Make the POST request
         response = requests.post(local_url, files=payload)

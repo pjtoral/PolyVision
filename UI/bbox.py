@@ -1,18 +1,21 @@
 import sys
 import os
 import cv2
+import random
+from PIL import Image
+import numpy as np
 
 class BoundingBox():
 
     def __init__(self,file_path, plots, parent=None):
-        # Path to the image
-        image_path = file_path
-
         # Bounding box data from the JSON object
         bounding_boxes = plots
 
-        # Load the image
-        self.image = cv2.imread(image_path)
+        image_path = file_path
+        image = Image.open(image_path)
+        image = image.resize((640, 640))
+        
+        self.image= np.array(image)
 
         # Draw bounding boxes on the image
         for bbox_data in bounding_boxes:
@@ -21,16 +24,21 @@ class BoundingBox():
             score = bbox_data["score"]
 
             x_min, y_min, x_max, y_max = map(int, bbox)
-            color = (255,0,255)  # Green color for bounding boxes
-            thickness = 2
+
+            red = random.randint(0, 150)
+            green = random.randint(0, 150)
+            blue = random.randint(0, 150)
+            color = (red, green, blue)
+
+            thickness = 1
 
             # Draw the bounding box
             cv2.rectangle(self.image, (x_min, y_min), (x_max, y_max), color, thickness)
 
             # Add label with class ID and score
             label = f"microplastic, Score: {score:.2f}"
-            label_position = (x_min, y_min - 10)
-            cv2.putText(self.image, label, label_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, thickness)
+            label_position = (x_min, y_min-2)
+            cv2.putText(self.image, label, label_position, cv2.FONT_HERSHEY_SIMPLEX, 0.27, color, thickness)
 
     def get_image(self):
         return self.image

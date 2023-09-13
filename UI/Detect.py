@@ -135,7 +135,7 @@ class DetectUI(QDialog):
     def detect_mp(self):
         plot = DetectMP(self.file_path)
         new_image = BoundingBox(self.file_path, plot.get_json())
-        rgb_image = cv2.cvtColor(new_image.get_image(), cv2.COLOR_BGR2RGB)
+        rgb_image =new_image.get_image()
         # Convert ndarray image to QImage
         height, width, channel = rgb_image.shape
         bytes_per_line = 3 * width
@@ -143,6 +143,7 @@ class DetectUI(QDialog):
         qpixmap = QtGui.QPixmap.fromImage(qimage)
         self.scroll_widget.setPixmap(qpixmap)
         self.scroll_widget.setScaledContents(True)
+
 
         #pass self.file_path to detectron2 local
         #read JSON and 

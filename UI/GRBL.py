@@ -3,8 +3,11 @@ import os
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, QInputDialog, QLineEdit, QPushButton
+from PyQt5.QtCore import *
 
 class GrblUI(QtWidgets.QDialog): 
+    manual_clicked = pyqtSignal()
+    auto_clicked = pyqtSignal()
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -41,11 +44,13 @@ class GrblUI(QtWidgets.QDialog):
         self.setLayout(layout)
 
     def manual_grbl(self):
+        self.manual_clicked.emit()
+        self.close()
 
-        pass
     def auto_grbl(self):
-        
-        pass
+        print("automatic")
+        self.auto_clicked.emit()
+        self.close()
 
 def main():
     app = QApplication(sys.argv)
