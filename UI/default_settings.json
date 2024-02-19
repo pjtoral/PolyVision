@@ -1,0 +1,20 @@
+{
+    "app_name": "PolyVision",
+    "version": "1.0.0",
+    "year_created": "2023",
+    "image_settings": {
+        "image_quality": "Medium",
+        "image_sharpness": 1,
+        "image_saturation": 0,
+        "calibration": 0.0084
+    },
+    "grbl_settings": {
+        "steps_per_mm": 1.0,
+        "max_feedrate": 1000.0,
+        "area_scan": true
+    },
+    "general_features": {
+        "model": "Binary",
+        "sound": false
+    }
+}
